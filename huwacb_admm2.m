@@ -1,6 +1,6 @@
-function [x,xc,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
+function [x,z,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 
-% [x,b,res_p,res_d] = huwacb_admm2(A,y,varargin)
+% [x,z,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
 %
@@ -14,15 +14,16 @@ function [x,xc,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 %     Tol: tolearance
 %     Maxiter: maximum number of iterations
 %  Outputs
-%     X: estimated abundances (Na x N)
-%     xc: estimated concave background (L x N)
+%     x: estimated abundances (Na x N)
+%     z: estimated concave background (L x N)
+%     C: matrix (L x L) for z
 %     res_p,res_d: primal and dual residuals
 
 %  HUWACB solves the following convex optimization  problem 
 %  
-%         minimize    (1/2) ||Y-AX-CXc||^2_F
-%           X,Xc
-%         subject to  X>=0 and Xc(2:L-1,:)>=0
+%         minimize    (1/2) ||y-Ax-Cz||^2_F
+%           x,z
+%         subject to  X>=0 and z(2:L-1,:)>=0
 %  where C is the collection of bases to represent the concave background.
 %
 %
@@ -56,9 +57,12 @@ maxiter = 1000;
 % display only sunsal warnings
 verbose = 'off';
 % tolerance for the primal and dual residues
-tol = 1e-8;
+tol = 1e-4;
 % initialization of X0
 x0 = 0;
+% initialization of Z0
+z0 = 0;
+
 
 %%
 %--------------------------------------------------------------
@@ -78,11 +82,22 @@ else
                 tol = varargin{i+1};
             case 'VERBOSE'
                 verbose = varargin{i+1};
-%             case 'X0'
-%                 x0 = varargin{i+1};
-%                 if (size(x0,1) ~= p) | (size(x0,1) ~= N)
-%                     error('initial X is  inconsistent with M or Y');
-%                 end
+            case 'X0'
+                x0 = varargin{i+1};
+                if (size(x0,1) ~= N)
+                    error('initial X is  inconsistent with M or Y');
+                end
+                if size(x0,2)==1
+                    x0 = repmat(x0,[1,Ny]);
+                end
+            case 'Z0'
+                z0 = varargin{i+1};
+                if (size(z0,1) ~= L)
+                    error('initial X is  inconsistent with M or Y');
+                end
+                if size(z0,2)==1
+                    z0 = repmat(z0,[1,Ny]);
+                end
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -109,7 +124,6 @@ Sigma = diag(Sigma);
 Sigmarhoinv = 1./(Sigma + rho);
 Q = bsxfun(@times,V,Sigmarhoinv') * V.';
 ayy = T' * y;
-
 %%
 %--------------------------------------------------------------------------
 % Initialization
@@ -118,9 +132,16 @@ if x0 == 0
     s= Q*ayy;
     x = s(1:N,:);
     x(x<0) = 0;
+else
+    x=x0;
 end
-b = zeros([L,Ny]);
-s = [x;b];
+
+if z0 == 0
+    z = zeros([L,Ny]);
+else
+    z=z0;
+end
+s = [x;z];
 % augmented variables
 t = s;
 % dual variables
@@ -131,6 +152,7 @@ d = zeros([N+L,Ny]);
 %--------------------------------------------------------------------------
 % main loop
 %--------------------------------------------------------------------------
+
 tol_p = sqrt((L+N)*Ny)*tol;
 tol_d = sqrt((L+N)*Ny)*tol;
 k=1;
@@ -140,21 +162,21 @@ change_rho = 0;
 idx = [1:N,N+2:N+L-1];
 while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d)) 
     % save z to be used later
-    if mod(k,10) == 1
+    if mod(k,1) == 1
         t0 = t;
     end
-    % update s
-    s = Q * (ayy + rho * (t-d));
-    
     % update t
     t = s+d;
     t(idx,:) = max(t(idx,:),0);
+    
+    % update s
+    s = Q * (ayy + rho * (t-d));
     
     % update the dual variables
     d = d + s-t;
 
     % update mu so to keep primal and dual residuals whithin a factor of 10
-    if mod(k,10) == 1
+    if mod(k,1) == 1
         % primal residue
         res_p = norm(s-t,'fro');
         % dual residue
@@ -183,8 +205,7 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
 end
 
 x = s(1:N,:);
-xc = s(N+1:N+L,:);
-
-    
+z = s(N+1:N+L,:);
+   
  
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
