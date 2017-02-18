@@ -116,7 +116,11 @@ Cinv = C\eye(L);
 s_c = vnorms(Cinv,1);
 Cinv = bsxfun(@rdivide,Cinv,s_c);
 C = bsxfun(@times,C,s_c');
-T = [A Cinv];
+if isempty(A)
+    T = [Cinv];
+else
+    T = [A Cinv];
+end
 [V,Sigma] = svd(T'*T);
 V(N+1:N+L,:) = Cinv * V(N+1:N+L,:);
 Sigma = diag(Sigma);

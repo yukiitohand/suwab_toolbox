@@ -6,7 +6,8 @@ function [x,z,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 %
 %  Inputs
 %     A : dictionary matrix (L x Na) where Na is the number of atoms in the
-%     library and L is the number of wavelength bands
+%         library and L is the number of wavelength bands
+%         If A is empty, then computation is performed only for C
 %     y : observation vector (L x N) where N is the number of the
 %     observations.
 %     wv: wavelength samples (L x 1)
@@ -36,13 +37,20 @@ if (nargin-length(varargin)) ~= 3
     error('Wrong number of required parameters');
 end
 % mixing matrixsize
-[LA,N] = size(A);
+if isempty(A)
+    Aisempty = 1;
+    N = 0;
+else
+    Aisempty = 0;
+    [LA,N] = size(A);
+end
 % data set size
 [L,Ny] = size(y);
-if (LA ~= L)
-    error('mixing matrix M and data set y are inconsistent');
+if ~Aisempty
+    if (LA ~= L)
+        error('mixing matrix M and data set y are inconsistent');
+    end
 end
-
 wv = wv(:);
 Lwv = length(wv);
 if (L~=Lwv)
@@ -109,7 +117,13 @@ end
 %--------------------------------------------------------------------------
 % Create the bases for continuum.
 %--------------------------------------------------------------------------
-C = continuumDictionary(L);
+%C = continuumDictionary(L);
+C = concaveOperator(wv);
+Cinv = C\eye(L);
+s_c = vnorms(Cinv,1);
+Cinv = bsxfun(@rdivide,Cinv,s_c);
+C = bsxfun(@times,C,s_c');
+C = Cinv;
 
 %%
 %--------------------------------------------------------------------------
@@ -118,7 +132,11 @@ C = continuumDictionary(L);
 rho = 0.01;
 s_c = vnorms(C,1);
 C = bsxfun(@rdivide,C,s_c);
-T = [A C];
+if Aisempty
+    T = [C];
+else
+    T = [A C];
+end
 [V,Sigma] = svd(T'*T);
 Sigma = diag(Sigma);
 Sigmarhoinv = 1./(Sigma + rho);
@@ -128,12 +146,14 @@ ayy = T' * y;
 %--------------------------------------------------------------------------
 % Initialization
 %--------------------------------------------------------------------------
-if x0 == 0
-    s= Q*ayy;
-    x = s(1:N,:);
-    x(x<0) = 0;
-else
-    x=x0;
+if ~Aisempty
+    if x0 == 0
+        s= Q*ayy;
+        x = s(1:N,:);
+        x(x<0) = 0;
+    else
+        x=x0;
+    end
 end
 
 if z0 == 0
@@ -141,7 +161,11 @@ if z0 == 0
 else
     z=z0;
 end
-s = [x;z];
+if ~Aisempty
+    s = [x;z];
+else
+    s = z;
+end
 % augmented variables
 t = s;
 % dual variables
@@ -204,7 +228,11 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
     k=k+1;    
 end
 
-x = s(1:N,:);
+if Aisempty
+    x = [];
+else
+    x = s(1:N,:);
+end
 z = s(N+1:N+L,:);
    
  
