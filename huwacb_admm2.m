@@ -177,23 +177,25 @@ res_p = inf;
 res_d = inf;
 change_rho = 0;
 idx = [1:N,N+2:N+L-1];
+update_rho_active = 1;
 while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d)) 
     % save z to be used later
-    if mod(k,1) == 0
+    if mod(k,10) == 0
         t0 = t;
     end
-    % update t
-    t = s+d;
-    t(idx,:) = max(t(idx,:),0);
     
     % update s
     s = Q * (ayy + rho * (t-d));
+    
+    % update t
+    t = s+d;
+    t(idx,:) = max(t(idx,:),0);
     
     % update the dual variables
     d = d + s-t;
 
     % update mu so to keep primal and dual residuals whithin a factor of 10
-    if mod(k,1) == 0
+    if mod(k,10) == 0
         % primal residue
         res_p = norm(s-t,'fro');
         % dual residue
@@ -201,21 +203,23 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
         if  strcmp(verbose,'yes')
             fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
         end
-        % update mu
-        if res_p > 10*res_d
-            rho = rho*2;
-            d = d/2; d = d/2;
-            change_rho = 1;
-        elseif res_d > 10*res_p
-            rho = rho/2;
-            d = d*2; d = d*2;
-            change_rho = 1;
-        end
-        if  change_rho
-            % Px and Pb
-            Sigmarhoinv = 1./(Sigma + rho);
-            Q = bsxfun(@times,V,Sigmarhoinv') * V.';
-            change_rho = 0;
+        if update_rho_active
+            % update rho
+            if res_p > 10*res_d
+                rho = rho*10;
+                d = d/10;
+                change_rho = 1;
+            elseif res_d > 10*res_p
+                rho = rho/10;
+                d = d*10;
+                change_rho = 1;
+            end
+            if  change_rho
+                % Px and Pb
+                Sigmarhoinv = 1./(Sigma + rho);
+                Q = bsxfun(@times,V,Sigmarhoinv') * V.';
+                change_rho = 0;
+            end
         end
     end
     k=k+1;    
