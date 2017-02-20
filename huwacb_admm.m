@@ -159,8 +159,8 @@ change_rho = 0;
 
 while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d)) 
     % save z to be used later
-    if mod(k,1) == 0
-        u0 = s; w0 = w;
+    if mod(k,10) == 1
+        u0 = u; w0 = w;
     end
     % update X and B
     s = Q * [ay + rho*(u-du);y + rho*C.'*(w-dw)];
@@ -189,7 +189,7 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
     dw = dw + Cbminusw;
 
     % update mu so to keep primal and dual residuals whithin a factor of 10
-    if mod(k,1) == 0
+    if mod(k,10) == 1
         % primal residue
         res_p = norm(xminusu,'fro') + norm(Cbminusw,'fro');
         % dual residue

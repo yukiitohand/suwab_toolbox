@@ -184,12 +184,12 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
         t0 = t;
     end
     
-    % update s
-    s = Q * (ayy + rho * (t-d));
-    
     % update t
     t = s+d;
     t(idx,:) = max(t(idx,:),0);
+    
+    % update s
+    s = Q * (ayy + rho * (t-d));
     
     % update the dual variables
     d = d + s-t;
@@ -206,12 +206,12 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
         if update_rho_active
             % update rho
             if res_p > 10*res_d
-                rho = rho*10;
-                d = d/10;
+                rho = rho*2;
+                d = d/2;
                 change_rho = 1;
             elseif res_d > 10*res_p
-                rho = rho/10;
-                d = d*10;
+                rho = rho/2;
+                d = d*2;
                 change_rho = 1;
             end
             if  change_rho
@@ -228,9 +228,8 @@ end
 if Aisempty
     x = [];
 else
-    x = s(1:N,:);
+    x = t(1:N,:);
 end
-z = s(N+1:N+L,:);
-   
+z = t(N+1:N+L,:);
  
 end
