@@ -65,6 +65,8 @@ maxiter = 1000;
 verbose = 'no';
 % tolerance for the primal and dual residues
 tol = 1e-4;
+% weights for each dimensions
+weight = ones([L,1]);
 % initialization of X0
 x0 = 0;
 % initialization of Z0
@@ -83,6 +85,8 @@ else
                 tol = varargin{i+1};
             case 'VERBOSE'
                 verbose = varargin{i+1};
+            case 'WEIGHT'
+                weight = varargin{i+1};
             case 'X0'
                 x0 = varargin{i+1};
                 if (size(x0,1) ~= N)
@@ -105,6 +109,11 @@ else
         end;
     end;
 end
+weight = weight(:);
+if length(weight)~=L
+    error('The size of weight is not correct.');
+end
+
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -130,10 +139,13 @@ if Aisempty
 else
     T = [A C];
 end
+weight = weight(:);
+T = bsxfun(@times,weight,T);
 [V,Sigma] = svd(T'*T);
 Sigma = diag(Sigma);
 Sigmarhoinv = 1./(Sigma + rho);
 Q = bsxfun(@times,V,Sigmarhoinv') * V.';
+y = bsxfun(@times,weight,y);
 ayy = T' * y;
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
