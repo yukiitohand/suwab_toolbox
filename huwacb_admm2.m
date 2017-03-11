@@ -50,6 +50,9 @@ if ~Aisempty
         error('mixing matrix M and data set y are inconsistent');
     end
 end
+if ~isvector(wv) || ~isnumeric(wv)
+    error('wv must be a numeric vector.');
+end
 wv = wv(:);
 Lwv = length(wv);
 if (L~=Lwv)
@@ -120,12 +123,13 @@ end
 % Create the bases for continuum.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %C = continuumDictionary(L);
-C = concaveOperator(wv);
-Cinv = C\eye(L);
-s_c = vnorms(Cinv,1);
-Cinv = bsxfun(@rdivide,Cinv,s_c);
-C = bsxfun(@times,C,s_c');
-C = Cinv;
+% C = concaveOperator(wv);
+% Cinv = C\eye(L);
+% s_c = vnorms(Cinv,1);
+% Cinv = bsxfun(@rdivide,Cinv,s_c);
+% C = bsxfun(@times,C,s_c');
+% C = Cinv;
+C = continuumDictionary(wv);
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

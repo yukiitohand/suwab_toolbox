@@ -1,4 +1,4 @@
-function [x,b,u,w,C,res_p,res_d] = rhuwacb_admm(A,y,wv,delta,varargin)
+function [x,b,u,w,C,res_p,res_d] = rhuwacb_admm(A,y,wv,varargin)
 % [x,b,res_p,res_d] = rhuwacb_admm(A,y,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
@@ -9,10 +9,10 @@ function [x,b,u,w,C,res_p,res_d] = rhuwacb_admm(A,y,wv,delta,varargin)
 %     y : observation vector (L x N) where N is the number of the
 %     observations.
 %     wv: wavelength samples (L x 1)
-%     delta
 %  Optional parameters
 %     Tol: tolearance
 %     Maxiter: maximum number of iterations
+%     DELTA: specify how much non-concavity is allowed.
 %  Outputs
 %     X: estimated abundances (Na x N)
 %     B: estimated concave background (L x N)
@@ -73,7 +73,8 @@ tol = 1e-4;
 x0 = 0;
 % initialization of B0
 b0 = 0;
-
+% initalization of delta
+delta = 0;
 %%
 %--------------------------------------------------------------
 % Read the optional parameters
@@ -92,6 +93,8 @@ else
                 tol = varargin{i+1};
             case 'VERBOSE'
                 verbose = varargin{i+1};
+            case 'DELTA'
+                delta = varargin{i+1};
 %             case 'X0'
 %                 x0 = varargin{i+1};
 %                 if (size(x0,1) ~= p) | (size(x0,1) ~= N)

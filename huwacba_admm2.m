@@ -1,4 +1,4 @@
-function [x,z,w,C,DA,res_p,res_d] = huwacba_admm2(A,y,wv,varargin)
+function [x,z,w,C,DA,stdabsorp,res_p,res_d] = huwacba_admm2(A,y,wv,varargin)
 % [x,z,res_p,res_d] = huwacba_admm2(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
@@ -22,7 +22,7 @@ function [x,z,w,C,DA,res_p,res_d] = huwacba_admm2(A,y,wv,varargin)
 
 %  HUWACB solves the following convex optimization  problem 
 %  
-%         minimize    (1/2) ||y-Ax-Cz-D_A*a||^2_F = lambda*||a||_1
+%         minimize    (1/2) ||y-Ax-Cz-D_A*a||^2_F + lambda*||a||_1
 %           x,z
 %         subject to  X>=0, z(2:L-1,:)>=0, and a>=0
 %  where C is the collection of bases to represent the concave background.
@@ -131,24 +131,25 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %C = continuumDictionary(L);
 C = concaveOperator(wv);
-Cinv = C\eye(L);
-s_c = vnorms(Cinv,1);
-Cinv = bsxfun(@rdivide,Cinv,s_c);
-C = bsxfun(@times,C,s_c');
-C = Cinv;
-
+% Cinv = C\eye(L);
+% s_c = vnorms(Cinv,1);
+% Cinv = bsxfun(@rdivide,Cinv,s_c);
+% C = bsxfun(@times,C,s_c');
+% C = Cinv;
+C = continuumDictionary(wv);
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create the bases for absorption features
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-DA = zeros([length(wv),length(wv)]);
-for i=1:size(DA,2)
-    d = -normpdf(wv/1000,wv(i)/1000,stdabsorp);
-    DA(:,i) = d;
-end
-DA_norm = vnorms(DA,1);
-meanIdx = floor(length(wv)/2);
-DA = DA/DA_norm(meanIdx);
+[DA] = Gauss_absoprtionDictonary(wv,stdabsorp);
+% DA = zeros([length(wv),length(wv)]);
+% for i=1:size(DA,2)
+%     d = -normpdf(wv/1000,wv(i)/1000,stdabsorp);
+%     DA(:,i) = d;
+% end
+% DA_norm = vnorms(DA,1);
+% meanIdx = floor(length(wv)/2);
+% DA = DA/DA_norm(meanIdx);
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

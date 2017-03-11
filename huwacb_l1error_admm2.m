@@ -1,5 +1,5 @@
-function [x,z,e,C,res_p,res_d] = huwacb_l1noise_admm2(A,y,wv,varargin)
-% [x,z,e,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
+function [x,z,e,C,res_p,res_d] = huwacb_l1error_admm2(A,y,wv,varargin)
+% [x,z,e,C,res_p,res_d] = huwacb_l1error_admm2(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
 %
