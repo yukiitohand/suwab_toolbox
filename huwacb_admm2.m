@@ -2,6 +2,7 @@ function [x,z,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 % [x,z,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
+% sparsity constraint on 
 %
 %  Inputs
 %     A : dictionary matrix (L x N) where Na is the number of atoms in the
@@ -14,6 +15,9 @@ function [x,z,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 %     'Tol': tolearance (default) 1e-4
 %     'Maxiter': maximum number of iterations (default) 1000
 %     'VERBOSE': {'yes', 'no'}
+%     'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
+%                 vector, the length must be equal to "N"
+%                 (default) 0
 %  Outputs
 %     x: estimated abundances (Na x N)
 %     z: estimated concave background (L x N)
@@ -22,7 +26,7 @@ function [x,z,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 
 %  HUWACB solves the following convex optimization  problem 
 %  
-%         minimize    (1/2) ||y-Ax-Cz||^2_F
+%         minimize    (1/2) ||y-Ax-Cz||^2_F + lambda_a .* ||x||_1
 %           x,z
 %         subject to  X>=0 and z(2:L-1,:)>=0
 %  where C is the collection of bases to represent the concave background.
@@ -70,6 +74,8 @@ verbose = 'no';
 tol = 1e-4;
 % weights for each dimensions
 weight = ones([L,1]);
+% sparsity constraint on the library
+lambda_a = 0.0;
 % initialization of X0
 x0 = 0;
 % initialization of Z0
@@ -90,6 +96,18 @@ else
                 verbose = varargin{i+1};
             case 'WEIGHT'
                 weight = varargin{i+1};
+                weight = weight(:);
+                if length(weight)~=L
+                    error('The size of weight is not correct.');
+                end
+            case 'LAMBDA_A'
+                lambda_a = varargin{i+1};
+                lambda_a = lambda_a(:);
+                if isvector(lambda_a)
+                    if length(lambda_a)~=N
+                        error('Size of lambda_a is not right');
+                    end
+                end
             case 'X0'
                 x0 = varargin{i+1};
                 if (size(x0,1) ~= N)
@@ -112,10 +130,7 @@ else
         end;
     end;
 end
-weight = weight(:);
-if length(weight)~=L
-    error('The size of weight is not correct.');
-end
+
 
 
 %%
@@ -194,7 +209,7 @@ res_d = inf;
 change_rho = 0;
 idx = [1:N,N+2:N+L-1];
 update_rho_active = 1;
-while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d)) 
+while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save z to be used later
     if mod(k,10) == 0
         t0 = t;
@@ -203,6 +218,7 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
     % update t
     t = s+d;
     t(idx,:) = max(t(idx,:),0);
+    t(1:N,:) = soft_thresh(t(1:N,:),lambda_a./rho);
     
     % update s
     s = Q * (ayy + rho * (t-d));
