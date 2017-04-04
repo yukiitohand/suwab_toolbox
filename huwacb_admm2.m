@@ -103,7 +103,7 @@ else
             case 'LAMBDA_A'
                 lambda_a = varargin{i+1};
                 lambda_a = lambda_a(:);
-                if isvector(lambda_a)
+                if ~isscalar(lambda_a)
                     if length(lambda_a)~=N
                         error('Size of lambda_a is not right');
                     end
