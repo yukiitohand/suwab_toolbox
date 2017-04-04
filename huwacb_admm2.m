@@ -214,7 +214,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     if mod(k,10) == 0
         t0 = t;
     end
-    
+%     fprintf('k=%d\n',k);
     % update t
     t = s+d;
     t(idx,:) = max(t(idx,:),0);
