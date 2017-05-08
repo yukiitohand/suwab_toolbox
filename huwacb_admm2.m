@@ -76,6 +76,10 @@ tol = 1e-4;
 weight = ones([L,1]);
 % sparsity constraint on the library
 lambda_a = 0.0;
+
+% nonnegativity constraint on the library
+nonneg = ones([N,1]);
+
 % initialization of X0
 x0 = 0;
 % initialization of Z0
@@ -108,6 +112,18 @@ else
                         error('Size of lambda_a is not right');
                     end
                 end
+               
+            case 'NONNEG'
+                nonneg = varargin{i+1};
+                nonneg = nonneg(:);
+                if ~isscalar(nonneg)
+                    if length(nonneg)~=N
+                        error('Size of nonneg is not right');
+                    end
+                else
+                    nonneg = ones([N,1])*nonneg;
+                end
+            
             case 'X0'
                 x0 = varargin{i+1};
                 if (size(x0,1) ~= N)
@@ -207,7 +223,7 @@ k=1;
 res_p = inf;
 res_d = inf;
 change_rho = 0;
-idx = [1:N,N+2:N+L-1];
+idx = [find(nonneg>0)', N+2:N+L-1];
 update_rho_active = 1;
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save z to be used later
