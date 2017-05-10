@@ -73,6 +73,8 @@ else
 end
 z = nan([L,Ny]);
 switch func2str(func)
+    case 'huwacb_admm'
+        
     case 'huwacb_admm2'
 
     case 'huwacb_l1error_admm2'
@@ -94,6 +96,8 @@ else
             Atmp = A(activeBands,:);
             wvtmp = wv(activeBands);
             switch func2str(func)
+                case 'huwacb_admm'
+                    [xtmp,btmp,~,~,~] = func(Atmp,ytmp,wvtmp,varargin{:});
                 case 'huwacb_admm2'
                     [xtmp,ztmp,~,~,~] = func(Atmp,ytmp,wvtmp,varargin{:});
                 case 'huwacb_l1error_admm2'
@@ -106,11 +110,14 @@ else
             if ~Aisempty
                 x(:,activeIdxes) = xtmp;
             end
-            z(activeBands,activeIdxes) = ztmp;
+            
             switch func2str(func)
+                case 'huwacb_admm'
+                    b(activeBands,activeIdxes) = btmp;
                 case 'huwacb_admm2'
-
+                    z(activeBands,activeIdxes) = ztmp;
                 case 'huwacb_l1error_admm2'
+                    z(activeBands,activeIdxes) = ztmp;
                     e(activeBands,activeIdxes)=etmp;
                 otherwise
                     error('function "%s" is not integrated to this function yet.',func2str(func));
@@ -121,11 +128,14 @@ else
     %% setup output parameters
     C = continuumDictionary(wv);
     varargout{1} = x;
-    varargout{2} = z;
     switch func2str(func)
+        case 'huwacb_admm'
+            varargout{2} = b;
         case 'huwacb_admm2'
+            varargout{2} = z;
             varargout{3}=C;
         case 'huwacb_l1error_admm2'
+            varargout{2} = z;
             varargout{3} = e;
             varargout{4} = C;
         otherwise

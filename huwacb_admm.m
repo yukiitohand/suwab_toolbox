@@ -12,6 +12,9 @@ function [x,b,u,w,C,res_p,res_d] = huwacb_admm(A,y,wv,varargin)
 %  Optional parameters
 %     Tol: tolearance
 %     Maxiter: maximum number of iterations
+%     'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
+%                 vector, the length must be equal to "N"
+%                 (default) 0
 %  Outputs
 %     X: estimated abundances (Na x N)
 %     B: estimated concave background (L x N)
@@ -59,6 +62,12 @@ maxiter = 5000;
 verbose = 'off';
 % tolerance for the primal and dual residues
 tol = 1e-4;
+% weights for each dimensions
+weight = ones([L,1]);
+% sparsity constraint on the library
+lambda_a = 0.0;
+% nonnegativity constraint on the library
+nonneg = ones([N,1]);
 % initialization of X0
 x0 = 0;
 % initialization of B0
@@ -82,6 +91,48 @@ else
                 tol = varargin{i+1};
             case 'VERBOSE'
                 verbose = varargin{i+1};
+%             case 'WEIGHT'
+%                 weight = varargin{i+1};
+%                 weight = weight(:);
+%                 if length(weight)~=L
+%                     error('The size of weight is not correct.');
+%                 end
+            case 'LAMBDA_A'
+                lambda_a = varargin{i+1};
+                lambda_a = lambda_a(:);
+                if ~isscalar(lambda_a)
+                    if length(lambda_a)~=N
+                        error('Size of lambda_a is not right');
+                    end
+                end
+               
+%             case 'NONNEG'
+%                 nonneg = varargin{i+1};
+%                 nonneg = nonneg(:);
+%                 if ~isscalar(nonneg)
+%                     if length(nonneg)~=N
+%                         error('Size of nonneg is not right');
+%                     end
+%                 else
+%                     nonneg = ones([N,1])*nonneg;
+%                 end
+            
+            case 'X0'
+                x0 = varargin{i+1};
+                if (size(x0,1) ~= N)
+                    error('initial X is  inconsistent with M or Y');
+                end
+                if size(x0,2)==1
+                    x0 = repmat(x0,[1,Ny]);
+                end
+            case 'B0'
+                b0 = varargin{i+1};
+                if (size(b0,1) ~= L)
+                    error('initial b is  inconsistent with M or Y');
+                end
+                if size(z0,2)==1
+                    b0 = repmat(z0,[1,Ny]);
+                end
 %             case 'X0'
 %                 x0 = varargin{i+1};
 %                 if (size(x0,1) ~= p) | (size(x0,1) ~= N)
@@ -174,6 +225,7 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
     
     % update u and w
     u = max(x+du,0);
+    u = soft_thresh(u,lambda_a./rho);
 %     tmp = bsxfun(@times,b,Cdiag);
 %     tmp(1:end-1,:) = tmp(1:end-1,:) + bsxfun(@times,b(2:end,:),Cdiagu);
 %     tmp(2:end,:) = tmp(2:end,:) + bsxfun(@times,b(1:end-1,:),Cdiagl);
