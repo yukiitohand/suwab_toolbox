@@ -135,7 +135,7 @@ else
             case 'Z0'
                 z0 = varargin{i+1};
                 if (size(z0,1) ~= L)
-                    error('initial X is  inconsistent with M or Y');
+                    error('initial Z is  inconsistent with M or Y');
                 end
                 if size(z0,2)==1
                     z0 = repmat(z0,[1,Ny]);
