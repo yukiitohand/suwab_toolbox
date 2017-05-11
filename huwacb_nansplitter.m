@@ -71,13 +71,14 @@ if Aisempty
 else
     x = nan([N,Ny]);
 end
-z = nan([L,Ny]);
+
 switch func2str(func)
     case 'huwacb_admm'
-        
+        b = nan([L,Ny]);
     case 'huwacb_admm2'
-
+        z = nan([L,Ny]);
     case 'huwacb_l1error_admm2'
+        z = nan([L,Ny]);
         e=nan([L,Ny]);
     otherwise
         error('function "%s" is not integrated to this function yet.',func2str(func));

@@ -39,13 +39,22 @@ if (nargin-length(varargin)) ~= 3
     error('Wrong number of required parameters');
 end
 % mixing matrixsize
-[LA,N] = size(A);
+Aisempty = isempty(A);
+if Aisempty
+    N = 0;
+else
+    [LA,N] = size(A);
+end
 % data set size
 [L,Ny] = size(y);
-if (LA ~= L)
-    error('mixing matrix M and data set y are inconsistent');
+if ~Aisempty
+    if (LA ~= L)
+        error('mixing matrix M and data set y are inconsistent');
+    end
 end
-
+if ~isvector(wv) || ~isnumeric(wv)
+    error('wv must be a numeric vector.');
+end
 wv = wv(:);
 Lwv = length(wv);
 if (L~=Lwv)
@@ -130,7 +139,7 @@ else
                 if (size(b0,1) ~= L)
                     error('initial b is  inconsistent with M or Y');
                 end
-                if size(z0,2)==1
+                if size(b0,2)==1
                     b0 = repmat(z0,[1,Ny]);
                 end
 %             case 'X0'
@@ -167,7 +176,7 @@ Cinv = C\eye(L);
 s_c = vnorms(Cinv,1);
 Cinv = bsxfun(@rdivide,Cinv,s_c);
 C = bsxfun(@times,C,s_c');
-if isempty(A)
+if Aisempty
     T = [Cinv];
 else
     T = [A Cinv];
@@ -183,12 +192,22 @@ ay = A.' * y;
 %--------------------------------------------------------------------------
 % Initialization
 %--------------------------------------------------------------------------
-if x0 == 0
-    s= Q*[ay;y];
-    x = s(1:N,:);
-    x(x<0) = 0;
+if ~Aisempty
+    if x0 == 0
+        s= Q*[ay;y];
+        x = s(1:N,:);
+        x(x<0) = 0;
+    else
+        x=x0;
+    end
 end
-b = zeros([L,Ny]);
+
+if b0 == 0
+    b = zeros([L,Ny]);
+else
+    b=b0;
+end
+
 % augmented variables
 u = x;
 w = C*b;
