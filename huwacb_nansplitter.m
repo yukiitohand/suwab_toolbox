@@ -77,6 +77,7 @@ switch func2str(func)
         b = nan([L,Ny]);
     case 'huwacb_admm2'
         z = nan([L,Ny]);
+        b = nan([L,Ny]);
     case 'huwacb_l1error_admm2'
         z = nan([L,Ny]);
         e=nan([L,Ny]);
@@ -100,7 +101,8 @@ else
                 case 'huwacb_admm'
                     [xtmp,btmp,~,~,~] = func(Atmp,ytmp,wvtmp,varargin{:});
                 case 'huwacb_admm2'
-                    [xtmp,ztmp,~,~,~] = func(Atmp,ytmp,wvtmp,varargin{:});
+                    [xtmp,ztmp,C1,~,~] = func(Atmp,ytmp,wvtmp,varargin{:});
+                    btmp = C1 * ztmp;
                 case 'huwacb_l1error_admm2'
                     [xtmp,ztmp,etmp,~,~,~] = func(Atmp,ytmp,wvtmp,varargin{:});
                 case 'rhuwacb_admm'
@@ -117,6 +119,7 @@ else
                     b(activeBands,activeIdxes) = btmp;
                 case 'huwacb_admm2'
                     z(activeBands,activeIdxes) = ztmp;
+                    b(activeBands,activeIdxes) = btmp;
                 case 'huwacb_l1error_admm2'
                     z(activeBands,activeIdxes) = ztmp;
                     e(activeBands,activeIdxes)=etmp;
@@ -134,7 +137,8 @@ else
             varargout{2} = b;
         case 'huwacb_admm2'
             varargout{2} = z;
-            varargout{3}=C;
+            varargout{3} = C;
+            varargout{4} = b;
         case 'huwacb_l1error_admm2'
             varargout{2} = z;
             varargout{3} = e;

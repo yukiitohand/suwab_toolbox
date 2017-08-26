@@ -28,11 +28,10 @@ function [x,z,C,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 %  
 %         minimize    (1/2) ||y-Ax-Cz||^2_F + lambda_a .* ||x||_1
 %           x,z
-%         subject to  X>=0 and z(2:L-1,:)>=0
+%         subject to  x>=0 and z(2:L-1,:)>=0
 %  where C is the collection of bases to represent the concave background.
 %
 %
-
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % check validity of input parameters
@@ -143,8 +142,8 @@ else
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
-        end;
-    end;
+        end
+    end
 end
 
 
@@ -176,8 +175,10 @@ else
 end
 weight = weight(:);
 T = bsxfun(@times,weight,T);
-[V,Sigma] = svd(T'*T);
-Sigma = diag(Sigma);
+% [V,Sigma] = svd(T'*T);
+[U,Sigma1,V] = svd(T);
+Sigma = zeros([size(T,2),1]);
+Sigma(1:size(T,1)) = diag(Sigma1).^2;
 Sigmarhoinv = 1./(Sigma + rho);
 Q = bsxfun(@times,V,Sigmarhoinv') * V.';
 y = bsxfun(@times,weight,y);
@@ -216,7 +217,7 @@ d = zeros([N+L,Ny]);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+% tic
 tol_p = sqrt((L+N)*Ny)*tol;
 tol_d = sqrt((L+N)*Ny)*tol;
 k=1;
@@ -225,6 +226,7 @@ res_d = inf;
 change_rho = 0;
 idx = [find(nonneg>0)', N+2:N+L-1];
 update_rho_active = 1;
+tst = tic;
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save z to be used later
     if mod(k,10) == 0
@@ -272,12 +274,11 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     k=k+1;    
 end
-
+% toc
 if Aisempty
     x = [];
 else
     x = t(1:N,:);
 end
 z = t(N+1:N+L,:);
- 
 end
