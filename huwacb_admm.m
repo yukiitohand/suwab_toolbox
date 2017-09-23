@@ -150,13 +150,13 @@ else
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
-        end;
-    end;
+        end
+    end
 end
 
 
 % compute mean norm
-ynrm = vnorms(y,1);
+% ynrm = vnorms(y,1);
 % rescale M and Y and lambda
 % A = A/ynrm;
 % y = y/ynrm;
@@ -233,7 +233,9 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
         u0 = u; w0 = w;
     end
     % update X and B
+    
     s = Q * [ay + rho*(u-du);y + rho*C.'*(w-dw)];
+    
 %     wdw = w-dw;
 %     tmp = bsxfun(@times,wdw,Cdiag);
 %     tmp(1:end-1,:) = tmp(1:end-1,:) + bsxfun(@times,wdw(2:end,:),Cdiagl);
@@ -243,8 +245,10 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
     b = s(N+1:N+L,:);
     
     % update u and w
+    
     u = max(x+du,0);
     u = soft_thresh(u,lambda_a./rho);
+    
 %     tmp = bsxfun(@times,b,Cdiag);
 %     tmp(1:end-1,:) = tmp(1:end-1,:) + bsxfun(@times,b(2:end,:),Cdiagu);
 %     tmp(2:end,:) = tmp(2:end,:) + bsxfun(@times,b(1:end-1,:),Cdiagl);
@@ -254,15 +258,20 @@ while (k <= maxiter) && ((abs (res_p) > tol_p) || (abs (res_d) > tol_d))
     w(2:L-1,:) = max(w(2:L-1,:),0);
     
     % update the dual variables
-    xminusu = x-u;
+    xminusu = x-u; 
     du = du + xminusu;
     Cbminusw = tmp2-w;
     dw = dw + Cbminusw;
-
+    
+%     tic; 
+%     du = du + x-u; dw=dw+C*b-w;
+%     toc;
+    
     % update mu so to keep primal and dual residuals whithin a factor of 10
     if mod(k,10) == 1
         % primal residue
         res_p = norm(xminusu,'fro') + norm(Cbminusw,'fro');
+%         res_p = norm(x-u,'fro') + norm(C*b-w,'fro');
         % dual residue
 %         ww0 = w-w0;
 %         tmp2 = bsxfun(@times,ww0,Cdiag);

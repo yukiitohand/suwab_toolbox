@@ -1,4 +1,4 @@
-function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
+function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2_test(A,y,wv,varargin)
 % [x,z,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
@@ -185,7 +185,7 @@ else
                     error('initial Z is inconsistent with A or Y');
                 end
                 if size(b0,2)==1
-                    b0 = repmat(z0,[1,Ny]);
+                    b0 = repmat(b0,[1,Ny]);
                 elseif size(b0,2)~= Ny
                     error('Size of Z0 is not valid');
                 end
@@ -194,9 +194,9 @@ else
                 if (size(d0,1) ~= (N+L))
                     error('initial D is inconsistent with A or Y');
                 end
-                if size(z0,2)==1
-                    d0 = repmat(z0,[1,Ny]);
-                elseif size(z0,2)~= Ny
+                if size(d0,2)==1
+                    d0 = repmat(d0,[1,Ny]);
+                elseif size(d0,2)~= Ny
                     error('Size of D0 is not valid');
                 end
             otherwise
@@ -206,8 +206,10 @@ else
     end
 end
 
-if b0~=0 && z~=0
-    error('B0 and Z0 are both defined');
+if b0~=0 
+    if z0~=0
+        error('B0 and Z0 are both defined');
+    end
 end
 
 %%
@@ -241,7 +243,7 @@ end
 % T = bsxfun(@times,weight,T);
 % [V,Sigma] = svd(T'*T);
 [U,Sigma1,V] = svd(T);
-Sigma = zeros([N+L,1]);
+Sigma = zeros([NL,1]);
 Sigma(1:L) = diag(Sigma1).^2;
 Sigmarhoinv = 1./(Sigma + rho);
 Q = bsxfun(@times,V,Sigmarhoinv') * V.';
@@ -259,42 +261,68 @@ kappa2(N+1) = -inf; kappa2(NL) = -inf;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initialization
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if ~Aisempty
-    if x0 == 0
-        s= Q*ayy;
-        x = s(1:N,:);
-        x(x<0) = 0;
-    else
-        x=x0;
-    end
+if b0~=0
+    z0 = C\b0;
 end
 
-if b0==0
-    if z0 == 0
-        z = zeros([L,Ny]);
-    else
-        z=z0;
-    end
+% if ~Aisempty
+%     if x0 == 0
+%         s= Q*ayy;
+%         x = s(1:N,:);
+%         x(x<0) = 0;
+%     else
+%         x=x0;
+%     end
+% end
+
+
+if x0==0
+%     s = zeros(NL,Ny);
+%     if Aisempty
+        
+        s = Q*ayy;
+        s = max(s,kappa2);
+%     else
+        
+%         rho = rho0;
+% %         d = d0*rho;
+%         x0 = zeros(N,Ny);
+%         d0 = [d0(1:12,:);x0;d0(13:end,:)];
+%         x0(1:12,:) = x;
+        
+%         s = [x;z];
+%     end
 else
-    z = C\b0;
+%     s = [x0;z0];
 end
 
-if ~Aisempty
-    s = [x;z];
-else
-    s = z;
-end
+
+% if b0==0
+% %     if z0 == 0
+% %         z = zeros([L,Ny]);
+% %     else
+% %         z=z0;
+% %     end
+% else
+%     z0 = C\b0;
+% end
+
+% if ~Aisempty
+%     s = [x;z];
+% else
+%     s = z;
+% end
 
 % augmented variables
 % t = s;
 % dual variables
 if d0==0
-    d = zeros([NL,Ny]);
-    t=s;
-%     t = max(s+d-kappa,kappa2);
+%     d = zeros([N+L,Ny]);
+    t = max(s-kappa,kappa2);
+    d = s-t;
 else
     d=d0/rho;
-    t=[x;z];
+    t=[x0;z0];
     s = Q * (ayy + rho * (t-d));
     d = d + s-t;
 end
@@ -305,32 +333,35 @@ end
 % main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % tic
-tol_p = sqrt((LN)*Ny)*tol;
-tol_d = sqrt((LN)*Ny)*tol;
+tol_p = sqrt((L+N)*Ny)*tol;
+tol_d = sqrt((L+N)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
 change_rho = 0;
-% idx = [find(nonneg>0)', N+2:N+L-1];
+% idx = [1:N, N+2:N+L-1];
 update_rho_active = 1;
 
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save z to be used later
 %     if mod(k,2) == 0 || k==1
-        t0 = t;
+        s0 = s;
 %     end
       
 %     fprintf('k=%d\n',k);
-    % update s
-    s = Q * (ayy + rho * (t-d));
+
     % update t
-%     s = 0.6*s +0.4*t; % under-relaxation
+    
 %     t = s+d;
 %     t(idx,:) = max(t(idx,:),0);
-%     t(1:N,:) = soft_thresh(t(1:N,:),lambda_a_tmp_rho);
+%     t(1:N,:) = soft_thresh(t(1:N,:),lambda_a_v);
 %     t = max(soft_thresh(s+d,kappa),kappa2);
     t = max(s+d-kappa,kappa2);
+%     t = 0.6*t +0.4*s; % under-relaxation
+    
+    % update s
+    s = Q * (ayy + rho * (t-d));
     
     % update the dual variables
     d = d + s-t;
@@ -339,7 +370,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % primal feasibility
         res_p = norm(s-t,'fro');
         % dual feasibility
-        res_d = rho*(norm((t-t0),'fro'));
+        res_d = rho*(norm((s-s0),'fro'));
         if  verbose
             fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
         end
@@ -350,7 +381,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % primal feasibility
         res_p = norm(s-t,'fro');
         % dual feasibility
-        res_d = rho*(norm((t-t0),'fro'));
+        res_d = rho*(norm((s-s0),'fro'));
         if  verbose
             fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
         end

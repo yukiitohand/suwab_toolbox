@@ -1,5 +1,5 @@
-function [ x,b,e,d,z,ancillaries ] = huwacb_nansplitter_v2(A,y,wv,groups,varargin )
-% [ varargout ] = huwacb_nansplitter_v2( at_func,A,y,wv,varargin_inherited )
+function [ x,b,r,ancillaries ] = nanhuwacbl1(A,y,wv,groups,varargin )
+% [ varargout ] = nanhuwacb( at_func,A,y,wv,groups,varargin_inherited )
 % perform HUWACB considering ignored values in the image
 % "NaN" in "y" is considered as ignored values.
 % "NaN" in "A" is not taken into consideration
@@ -16,12 +16,14 @@ function [ x,b,e,d,z,ancillaries ] = huwacb_nansplitter_v2(A,y,wv,groups,varargi
 %    x: learned abundances of the library A, [N x Ny]
 %    b: learned concave background: [L x Ny]
 %    e: learned l1 noise [L x Ny]
+%    d: learned dual parameters, [(N+L) x Ny]
 %    ancillaries: struct, storing ancillary information for the
 %    optimization result. Fields are
-%      activeIdxes : the indexes of the samples 
-%      activeBands : the bands used for this cluster
-%      Ctmp        : concave dictionary
-%      z           : learned coeficients
+%      - activeIdxes : the indexes of the samples 
+%      - activeBands : the bands used for this cluster
+%      - C           : concave dictionary
+%      - Z           : learned coeficients
+%      - rho         : spectral penalty parameter when converged
 
 %% check input variables
 % mixing matrix size
@@ -35,7 +37,7 @@ end
 [L,Ny] = size(y);
 if ~Aisempty
     if (LA ~= L)
-        error('mixing matrix M and data set y are inconsistent');
+        error('mixing matrix A and data set y are inconsistent');
     end
 end
 if ~isvector(wv) || ~isnumeric(wv)
@@ -52,6 +54,8 @@ end
 x0 = 0; x0_valuidx = 0;
 % initialization of Z0
 z0 = 0; z0_valuidx = 0;
+% initialization of B0
+b0 = 0; b0_valuidx = 0;
 % initialization of D0
 d0 = 0; d0_valuidx = 0;
 % initialization of e0
@@ -67,7 +71,7 @@ else
             case 'X0'
                 x0 = varargin{i+1};
                 if (size(x0,1) ~= N)
-                    error('initial X is  inconsistent with M');
+                    error('initial X is  inconsistent with A');
                 end
                 if size(x0,2)==1
                     x0 = repmat(x0,[1,Ny]);
@@ -86,6 +90,17 @@ else
                     error('initial Z is  inconsistent with Y');
                 end
                 z0_valuidx = i+1;
+            case 'B0'
+                b0 = varargin{i+1};
+                if (size(b0,1) ~= L)
+                    error('initial D is  inconsistent with A');
+                end
+                if size(b0,2)==1
+                    b0 = repmat(b0,[1,Ny]);
+                elseif size(b0,2) ~= Ny
+                    error('initial B is  inconsistent with Y');
+                end
+                b0_valuidx = i+1;
             case 'D0'
                 d0 = varargin{i+1};
                 if (size(d0,1) ~= N+L)
@@ -122,28 +137,7 @@ else
     end
 end
 
-
-%% split data set into groups
-% hash_list = cell([1,Ny]);
-% y_isnan = isnan(y);
-% 
-% for n=1:Ny
-%     hashList{n} = DataHash(y_isnan(:,n)); 
-% end
-% 
-% grpHashs = {};
-% grpIdxes = [];
-% grpPtrns = [];
-% for n=1:Ny
-%     gid = find(cellfun(@(x) strcmp(hashList{n},x),grpHashs));
-%     if isempty(gid)
-%         grpHashs = [grpHashs hashList{n}];
-%         grpIdxes{end+1} = [n];
-%         grpPtrns = [grpPtrns y_isnan(:,n)];
-%     else
-%         grpIdxes{gid} = [grpIdxes{gid} n];
-%     end
-% end
+% split data set into groups
 if isempty(groups)
     groups = nan_grouper(y);
 end
@@ -155,7 +149,7 @@ else
     x = nan([N,Ny]);
 end
 
-b = nan([L Ny]); e = nan([L,Ny]);
+b = nan([L Ny]); r = nan([L,Ny]); %r = nan(L,Ny);
 ancillaries = [];
 
 if all(isnan(wv))
@@ -172,29 +166,39 @@ else
             if x0_valuidx
                 varargin{x0_valuidx} = x0(:,activeIdxes);
             end
+            if b0_valuidx
+                varargin{b0_valuidx} = b0(activeBands,activeIdxes);
+            end
             if z0_valuidx
                 varargin{z0_valuidx} = z0(activeBands,activeIdxes);
             end
             if d0_valuidx
-                varargin{d0_valuidx} = d0([1:N,activeBands+N],activeIdxes);
+                d0tmp = d0(:,activeIdxes); d0tmp = d0tmp([true(N,1);activeBands+N],:);
+                varargin{d0_valuidx} = d0tmp;
             end
             if e0_valuidx
                 varargin{e0_valuidx} = e0(activeBands,activeIdxes);
             end
             
             if lambda_eisempty
-                [xtmp,ztmp,etmp,Ctmp,dtmp,rho] = huwacb_admm2(A,y,wv,varargin{:});
-                btmp = Ctmp * ztmp;
+%                 tic;
+                [xtmp,btmp,rtmp,~] = huwacbl1_cvx(Atmp,ytmp,wvtmp,varargin{:});
+%                 tic;[xtmp,btmp,rtmp,~] = huwacbl1_cvx_batch(Atmp,ytmp(:,1:100),wvtmp,varargin{:});toc;
+%                 [xtmp,ztmp,Ctmp,dtmp,rho] = huwacbl1_admm(Atmp,ytmp,wvtmp,varargin{:});
+%                 btmp = Ctmp * ztmp;
             else
-                [xtmp,ztmp,etmp,Ctmp] = huwacb_l1error_admm2(A,y,wv,varargin{:});
-                btmp = Ctmp * ztmp;
+%                 [xtmp,ztmp,etmp,Ctmp] = huwacb_l1error_admm2(Atmp,ytmp,wvtmp,varargin{:});
+%                 btmp = Ctmp * ztmp;
             end
 
             if ~Aisempty
                 x(:,activeIdxes) = xtmp;
             end
             
+            r(activeBands,activeIdxes) = rtmp;
             b(activeBands,activeIdxes) = btmp;
+%             d([true(N,1);activeBands],activeIdxes) = dtmp;
+            
             if lambda_eisempty
                 e(activeBands,activeIdxes) = 0;
             else
@@ -203,9 +207,10 @@ else
             
             ancillaries(gidi).activeIdxes = activeIdxes;
             ancillaries(gidi).activeBands = activeBands;
-            ancillaries(gidi).C = Ctmp;
-            ancillaries(gidi).Z = ztmp;
-            ancillaries(gidi).D = dtmp;
+%             ancillaries(gidi).C = Ctmp;
+%             ancillaries(gidi).Z = ztmp;
+%             ancillaries(gidi).rho = rho;
+%             ancillaries(gidi).D = dtmp;
         end
     end
 end
