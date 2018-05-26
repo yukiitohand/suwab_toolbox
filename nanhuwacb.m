@@ -182,7 +182,8 @@ else
             
             if lambda_eisempty
 %                 tic;
-                [xtmp,ztmp,Ctmp,dtmp,rho] = huwacb_admm2_test(Atmp,ytmp,wvtmp,varargin{:});
+                [xtmp,ztmp,Ctmp,dtmp,rho] = huwacb_admm2_stflip(Atmp,ytmp,wvtmp,varargin{:}); % fastest
+%                 [xtmp,ztmp,Ctmp,dtmp,rho] = huwacb_gadmm2_1(Atmp,ytmp,wvtmp,varargin{:}); 
 %                 [xtmp,ztmp,Ctmp,dtmp,rho] = huwacbl1_admm(Atmp,ytmp,wvtmp,varargin{:});
                 btmp = Ctmp * ztmp;
             else

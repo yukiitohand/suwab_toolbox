@@ -1,8 +1,8 @@
 function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 % [x,z,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
-% hyperspectral unmixing with adaptive concave background (HUWACB) via 
+% L1-constrained hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers (ADMM)
-% sparsity constraint on 
+% 
 %
 %  Inputs
 %     A : dictionary matrix (L x N) where Na is the number of atoms in the
@@ -37,14 +37,34 @@ function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
 %     d: estimated dual variables (N+L x Ny)
 %     rho: spectral penalty parameter at the convergence 
 %     res_p,res_d: primal and dual residuals for feasibility
-
+%
 %  HUWACB solves the following convex optimization  problem 
 %  
 %         minimize    (1/2) ||y-Ax-Cz||^2_F + lambda_a .* ||x||_1
 %           x,z
 %         subject to  x>=0 and z(2:L-1,:)>=0
 %  where C is the collection of bases to represent the concave background.
+%  The problem will be converted to a variant of non-negative lasso:
 %
+%         minimize    (1/2) ||y-Ts||^2_F + ||c1.*s||_1
+%           s
+%         subject to  s >= c2
+%   where       _   _ 
+%          s = |  x  |,  T = [A C],
+%              |_ z _|                       _       _
+%                 _          _              |    0_L  |
+%          c_1 = |  lambda_a  |,  and  c2 = |   -inf  | 
+%                |_   0_L    _|             | 0_{L-2} |
+%                                           |_  -inf _|
+%    This is solved via ADMM. The variable splitting used here is:
+%         minimize    (1/2) ||y-Ts||^2_F + ||c1.*t||_1 _+ I_{t>=c2}(t)
+%           s,t
+%         subject to  s-t=0
+%
+%    The augmented Lagrangian of a generalized ADMM is: 
+%         L = (1/2) ||y-Ts||^2_F + ||c1.*t||_1 _+ I_{t>=c2}(t)
+%                              + rho*d'(s-t) + rho/2||(s-t)||^2
+%    where rho is a spectral penalty parameters.
 %
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -305,8 +325,8 @@ end
 % main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % tic
-tol_p = sqrt((LN)*Ny)*tol;
-tol_d = sqrt((LN)*Ny)*tol;
+tol_p = sqrt(NL*Ny)*tol;
+tol_d = sqrt(NL*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
@@ -317,9 +337,9 @@ update_rho_active = 1;
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save z to be used later
-%     if mod(k,2) == 0 || k==1
+    if mod(k,10) == 0 || k==1
         t0 = t;
-%     end
+    end
       
 %     fprintf('k=%d\n',k);
     % update s
@@ -335,14 +355,14 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     % update the dual variables
     d = d + s-t;
     
-%     if mod(k,2) == 0 || k==1
-        % primal feasibility
-        res_p = norm(s-t,'fro');
-        % dual feasibility
-        res_d = rho*(norm((t-t0),'fro'));
-        if  verbose
-            fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
-        end
+%     if mod(k,10) == 0 || k==1
+%         % primal feasibility
+%         res_p = norm(s-t,'fro');
+%         % dual feasibility
+%         res_d = rho*(norm((t-t0),'fro'));
+%         if  verbose
+%             fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
+%         end
 %     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10

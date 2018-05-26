@@ -1,3 +1,4 @@
+% perform huwac_admm2 for each pixel independently
 function [ X,Z,C,res,res_p,res_d ] = huwacb_admm2_splitexec( A,y,wv,varargin )
 % [ X,Z,C,res,res_p,res_d ] = huwacb_admm2_splitexec( A,y,wv,varargin )
 %   This function is a wrapper for "huwacb_admm2.m", which splits the 

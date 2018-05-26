@@ -1,8 +1,11 @@
-function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2_test(A,y,wv,varargin)
+% used to be "huwacb_admm2_test.m"
+
+function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2_stflip(A,y,wv,varargin)
 % [x,z,res_p,res_d] = huwacb_admm2(A,y,wv,varargin)
-% hyperspectral unmixing with adaptive concave background (HUWACB) via 
-% alternating direction method of multipliers (ADMM)
-% sparsity constraint on 
+% hyperspectral unmixing with adaptive concave background (HUWACB) with L1 
+% sparsity constraint. via alternating direction method of multipliers 
+% (ADMM). This version, the iteration of s and t is flipped. After the dual
+% update, first t is updated and then s is updated.
 %
 %  Inputs
 %     A : dictionary matrix (L x N) where Na is the number of atoms in the
@@ -44,6 +47,8 @@ function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2_test(A,y,wv,varargin)
 %           x,z
 %         subject to  x>=0 and z(2:L-1,:)>=0
 %  where C is the collection of bases to represent the concave background.
+%
+%
 %
 %
 %%
@@ -368,12 +373,12 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     
 %     if mod(k,2) == 0 || k==1
         % primal feasibility
-        res_p = norm(s-t,'fro');
-        % dual feasibility
-        res_d = rho*(norm((s-s0),'fro'));
-        if  verbose
-            fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
-        end
+%         res_p = norm(s-t,'fro');
+%         % dual feasibility
+%         res_d = rho*(norm((s-s0),'fro'));
+%         if  verbose
+%             fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
+%         end
 %     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
@@ -383,7 +388,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % dual feasibility
         res_d = rho*(norm((s-s0),'fro'));
         if  verbose
-            fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
+            fprintf(' k = %f, res_p = %10e, res_d = %10e\n',k,res_p,res_d)
         end
         if update_rho_active
             % update rho

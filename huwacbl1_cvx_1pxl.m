@@ -1,8 +1,34 @@
-function [xtmp,rtmp,btmp] = huwacbl1_cvx_1pxl(A,ytmp,C,cl,L,N,n)
+function [xtmp,rtmp,btmp] = huwacbl1_cvx_1pxl(A,ytmp,C,cl,L,N,n,varargin)
+% display cvx detail or not
+verbose = false;
+
+if (rem(length(varargin),2)==1)
+    error('Optional parameters should always go by pairs');
+else
+    for i=1:2:(length(varargin)-1)
+        switch upper(varargin{i})
+            case 'VERBOSE'
+                if strcmp(varargin{i+1},'yes')
+                    verbose=true;
+                elseif strcmp(varargin{i+1},'no')
+                    verbose=false;
+                else
+                    error('verbose is invalid');
+                end
+            case 'SOLVER'
+                tmp = varargin{i+1};
+                cvx_solver tmp
+            otherwise
+                % Hmmm, something wrong with the parameter string
+                error(['Unrecognized option: ''' varargin{i} '''']);
+        end
+    end
+end
     ytmp_norm = norm(ytmp);
     I = eye(L) * ytmp_norm;
     Atmp = [A I -I];
-    cvx_begin quiet
+    cvx_begin
+    cvx_quiet(~verbose)
     variable xa(n)
     variable btmp(L)
     minimize( cl'*xa )

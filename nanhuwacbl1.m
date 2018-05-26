@@ -182,9 +182,20 @@ else
             
             if lambda_eisempty
 %                 tic;
-                [xtmp,btmp,rtmp,~] = huwacbl1_cvx(Atmp,ytmp,wvtmp,varargin{:});
-%                 tic;[xtmp,btmp,rtmp,~] = huwacbl1_cvx_batch(Atmp,ytmp(:,1:100),wvtmp,varargin{:});toc;
-%                 [xtmp,ztmp,Ctmp,dtmp,rho] = huwacbl1_admm(Atmp,ytmp,wvtmp,varargin{:});
+%                 tic; [xtmp,btmp,rtmp,~] = huwacbl1_cvx(Atmp,ytmp,wvtmp,varargin{:}); toc;
+% %                 [xtmp3,ztmp3,Ctmp3,rtmp3,dtmp3,outs] = aradmm_huwacbl1(Atmp,ytmp,wvtmp,lambda_a);
+% %                 tic;[xtmp,btmp,rtmp,~] = huwacbl1_cvx_batch(Atmp,ytmp(:,1:100),wvtmp,varargin{:});toc;
+%                 tic; [xtmp1,ztmp1,Ctmp1,dtmp1,rho1] = huwacbl1_admm(Atmp,ytmp(:,:),wvtmp,varargin{:},...
+%                      'verbose','yes','tol',1e-4,'maxiter',50000); toc;
+                 [xtmp,ztmp,Ctmp,rtmp,dtmp,rho] = huwacbl1_gadmm_a(Atmp,ytmp(:,:),wvtmp,varargin{:},...
+                     'verbose','yes','tol',1e-4,'maxiter',150);
+                 btmp = Ctmp * ztmp;
+%                 [xtmp1,tmp1,Ctmp1,dtmp1,rho1] = huwacbl1_admm1_2(Atmp,ytmp(:,20),wvtmp,varargin{:},...
+%                      'verbose','yes','tol',1e-4,'maxiter',15000);
+%                 [xtmp1,ztmp1,Ctmp1,dtmp1,rho1] = huwacbl1_admm2(Atmp,ytmp,wvtmp,varargin{:},...
+%                      'verbose','yes','tol',1e-5,'maxiter',15000);
+%                 [xtmp1,ztmp1,Ctmp1,dtmp1,rho1] = huwacbl1_admm2_1(Atmp,ytmp,wvtmp,varargin{:},...
+%                      'verbose','yes','tol',1e-4,'maxiter',1000);
 %                 btmp = Ctmp * ztmp;
             else
 %                 [xtmp,ztmp,etmp,Ctmp] = huwacb_l1error_admm2(Atmp,ytmp,wvtmp,varargin{:});

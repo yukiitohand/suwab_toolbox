@@ -77,7 +77,7 @@ end
 % Set the defaults for the optional parameters
 %--------------------------------------------------------------
 % display process or not
-verbose = 'yes';
+verbose = 'no';
 % sparsity constraint on the library
 lambda_a = 0.0;
 
@@ -124,7 +124,8 @@ cl(N+1:end) = 1;
 % cr = ones(Ny,1);
 for i=1:Ny
 %     tic;
-    tic; [x(:,i),r(:,i),b(:,i)] = huwacbl1_cvx_1pxl(A,y(:,i),C,cl,L,N,n); toc;
+    tic; [x(:,i),r(:,i),b(:,i)] = huwacbl1_cvx_1pxl(A,y(:,i),C,cl,L,N,n,...
+        'Verbose',verbose); toc;
 %     toc;
 end
 
