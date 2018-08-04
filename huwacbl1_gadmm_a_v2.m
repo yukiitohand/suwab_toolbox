@@ -111,9 +111,6 @@ d0 = [];
 % base matrix of concave curvature
 C = [];
 
-% whether or not to normalize the input spectra
-is_normalize = true;
-
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
 else
