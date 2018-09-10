@@ -229,6 +229,7 @@ end
 % C = Cinv;
 if isempty(C)
     C = continuumDictionary(wv);
+    % C = continuumDictionary_smooth(wv);
     s_c = vnorms(C,1);
     C = bsxfun(@rdivide,C,s_c);
     C = C*2;
