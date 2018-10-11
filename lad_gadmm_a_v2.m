@@ -1,4 +1,4 @@
-function [ x,r,d,rho,Rhov,res_pv,res_dv ] = lad_gadmm_a( A,y,varargin )
+function [ x,r,d,rho,Rhov,res_pv,res_dv ] = lad_gadmm_a_v2( A,y,varargin )
 % [ x,b,r,cvx_opts ] = lad_gadmm_a( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating 
 %   direction method of multipliers (ADMM) 
