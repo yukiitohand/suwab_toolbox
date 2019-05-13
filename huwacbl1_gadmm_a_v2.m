@@ -83,6 +83,7 @@ if (L~=Lwv)
     error('the wavelength samples wv is not correct.');
 end
 %%
+%tic;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Set the optional parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -215,7 +216,7 @@ end
 if ~isempty(b0) && ~isempty(z0)
     error('B0 and Z0 are both defined');
 end
-
+%toc;
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create the bases for continuum.
