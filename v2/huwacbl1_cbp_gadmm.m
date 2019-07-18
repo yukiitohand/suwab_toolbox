@@ -3,6 +3,31 @@ function [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_cbp_gadmm(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % a generalized alternating direction method of multipliers (ADMM)
 %
+%  HUWACB solves the following convex optimization  problem 
+%  
+%      minimize  ||lambda_r.*(y-Ax-Cz)||_1 + ||lambda_a.*x||_1
+%        x,z                                        + ||lambda_c.*z||_1
+%      subject to  x>=0 and z>=c2_z
+%  where by default,C(wv) is the collection of bases to represent the 
+%  concave background:
+%                _     _
+%               | -inf  |  /\
+%               |   0   |  ||
+%       c2_z =  |   :   |  || Nc
+%               |   0   |  ||
+%               |_-inf _|  \/
+%  
+%  You can optionally change C and c2_z as you like. By default,
+%  lambda_r = 1, lambda_a = 0.01, and lambda_c = 0. So the default problem
+%  is
+%      minimize  ||y-Ax-Cz||_1 + ||lambda_a.*x||_1
+%        x,z                                       
+%      subject to  x>=0 and z>=c2_z
+%  
+%  A variable is augmented r=y-Ax-Cz and the problem is casted as a
+%  constrained sparse least absolute deviation, subsequently as a
+%  constrained basis pursuit (CBP).
+%
 %  Inputs
 %     A : dictionary matrix (L x N) where Na is the number of atoms in the
 %         library and L is the number of wavelength bands
@@ -14,21 +39,29 @@ function [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_cbp_gadmm(A,y,wv,varargin)
 %     'TOL': tolearance (default) 1e-4
 %     'MAXITER' : maximum number of iterations (default) 1000
 %     'VERBOSE' : {'yes', 'no'}
-%     'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
-%                 vector, the length must be equal to "N"
+%     'LAMBDA_A': sparsity constraint on x, the size needs to be compatible
+%                 with the operation (lambda_a.*x)
+%                 (default) 0.01
+%     'LAMBDA_C': sparsity constraint on z, the size needs to be compatible
+%                 with the operation (lambda_c.*z)
 %                 (default) 0
+%     'LAMBDA_R': weight coefficients for the residual r. the size needs to
+%                 be comaptible with the operation (lambda_r .* r)
+%                 (default) 1
+%     'c2_z'    : right hand side of the c2_z, compatible with the
+%                 operation (z >= c2_z). By default 
 %     'X0'      : Initial x (coefficient vector/matrix for the libray A)
-%                 (default) 0
+%                 (default) []
 %     'Z0'      : Initial z (coefficient vector/matrix for the concave
-%                 bases C) (default) 0
-%     'C'       : Concave bases C [L x L]. This will be created from 'wv'
-%                 if not provided
+%                 bases C) (default) []
+%     'C'       : Concave bases C [L x L] or any base matrix [L x Nc]. 
+%                 This will be created from 'wv'  if not provided
 %     'B0'      : Initial Background vector B [L x N]. This will be converted to C
-%                 (default) 0
-%     'R0'      : Initial 'r'
-%                 (default) 0
-%     'D0'      : Initial dual parameters [N+L,L] (non-scaling form)
-%                 (default) 0
+%                 (default) []
+%     'R0'      : Initial 'r' residual
+%                 (default) []
+%     'D0'      : Initial dual parameters [N+Nc+L,Ny] (non-scaling form)
+%                 (default) []
 %     'rho'     : initial spectral penalty parameter for different samples,
 %                 scalar or the size of [1,Ny]
 %                 (default) 0.01
@@ -37,29 +70,22 @@ function [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_cbp_gadmm(A,y,wv,varargin)
 %                 (default) 1
 %  Outputs
 %     x: estimated abundances (N x Ny)
-%     z: estimated concave background (L x Ny)
+%     z: estimated concave background (Nc x Ny)
 %     C: matrix (L x L) for z
-%     r: residual
-%     d: estimated dual variables (N+L x Ny)
+%     r: residual (L x Ny) (not exactly equal to (y-Ax-Cz), due to practical convergence limitation)
+%     d: estimated dual variables ( (N+Nc+L) x Ny )
 %     rho: spectral penalty parameter "rho" at the convergence, [1 Ny]
 %     Rhov: spectral penalty parameter "Rhov" at the convergence, [L, 1]
 %     res_p,res_d: primal and dual residuals for feasibility
 
-%  HUWACB solves the following convex optimization  problem 
-%  
-%         minimize    ||y-Ax-Cz||^1 + lambda_a .* ||x||_1
-%           x,z
-%         subject to  x>=0 and z(2:L-1,:)>=0
-%  where C is the collection of bases to represent the concave background.
-%
+% note
+% error('inputParser is still in progress.');
+
 %
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % check validity of input parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if (nargin-length(varargin)) ~= 3
-    error('Wrong number of required parameters');
-end
 % mixing matrixsize
 Aisempty = isempty(A);
 if Aisempty
@@ -82,144 +108,101 @@ Lwv = length(wv);
 if (L~=Lwv)
     error('the wavelength samples wv is not correct.');
 end
+
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Set the optional parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % maximum number of AL iteration
-maxiter = 1000;
+maxiter_default = 1000;
 % display only sunsal warnings
-verbose = false;
+verbose_default = false;
 % tolerance for the primal and dual residues
-tol = 1e-4;
+tol_default = 1e-4;
 % sparsity constraint on the library
-lambda_a = 0.0;
+lambda_a_default = 0.01;
+% sparsity constraint on the concave base matrix
+lambda_c_default = 0.0;
+% weight coefficient for the model residual
+lambda_r_default = 1.0;
 % spectral penalty parameter
-rho = 0.01*ones([1,Ny]);
-Rhov = ones(N+L*2,1);
+rho_default = 0.01*ones([1,Ny]);
+Rhov_default = ones(N+L*2,1);
 
 % initialization of X0
-x0 = [];
+x0_default = [];
 % initialization of Z0
-z0 = [];
+z0_default = [];
 % initialization of B
-b0 = [];
+b0_default = [];
 % initialization of r0
-r0 = [];
+r0_default = [];
 % initialization of Lagrange multipliers, d0
-d0 = [];
+d0_default = [];
 % base matrix of concave curvature
-C = [];
+C_default = [];
+% c2_z
+c2_z_default = [];
 
-if (rem(length(varargin),2)==1)
-    error('Optional parameters should always go by pairs');
-else
-    for i=1:2:(length(varargin)-1)
-        switch upper(varargin{i})
-            case 'MAXITER'
-                maxiter = round(varargin{i+1});
-                if (maxiter <= 0 )
-                       error('AL_iters must a positive integer');
-                end
-            case 'TOL'
-                tol = varargin{i+1};
-            case 'VERBOSE'
-                if strcmp(varargin{i+1},'yes')
-                    verbose=true;
-                elseif strcmp(varargin{i+1},'no')
-                    verbose=false;
-                else
-                    error('verbose is invalid');
-                end
-            case 'LAMBDA_A'
-                lambda_a = varargin{i+1};
-                lambda_a = lambda_a(:);
-                if ~isscalar(lambda_a)
-                    if length(lambda_a)~=N
-                        error('Size of lambda_a is not right');
-                    end
-                end
-            case 'RHO'
-                rho = varargin{i+1};
-                if length(rho) ~= Ny && length(rho) ~= 1
-                    error('initial rho is not valid.');
-                end
-                if isscalar(rho)
-                    rho = rho*ones(1,Ny);
-                end
-            case 'RHOV'
-                Rhov= varargin{i+1};
-                if length(Rhov) ~= (N+L*2) && length(Rhov) ~= 1
-                    error('initial Rhov is not valid.');
-                end
-                if isscalar(Rhov)
-                    Rhov = Rhov*ones(N+L*2,1);
-                end
-            case 'X0'
-                x0 = varargin{i+1};
-                if (size(x0,1) ~= N)
-                    error('initial X is inconsistent with A or Y');
-                end
-                if size(x0,2)==1
-                    x0 = repmat(x0,[1,Ny]);
-                elseif size(x0,2)~= Ny
-                    error('Size of X0 is not valid');
-                end
-            case 'CONCAVEBASE'
-                C = varargin{i+1};
-                if any(size(C) ~= [L L])
-                    error('CONCAVEBASE is invalid size');
-                end
-            case 'Z0'
-                z0 = varargin{i+1};
-                if (size(z0,1) ~= L)
-                    error('initial Z is inconsistent with A or Y');
-                end
-                if size(z0,2)==1
-                    z0 = repmat(z0,[1,Ny]);
-                elseif size(z0,2)~= Ny
-                    error('Size of Z0 is not valid');
-                end
-            case 'B0'
-                b0 = varargin{i+1};
-                if (size(b0,1) ~= L)
-                    error('initial Z is inconsistent with A or Y');
-                end
-                if size(b0,2)==1
-                    b0 = repmat(z0,[1,Ny]);
-                elseif size(b0,2)~= Ny
-                    error('Size of Z0 is not valid');
-                end
-            case 'R0'
-                r0 = varargin{i+1};
-                if size(r0,1) ~= L && size(r0,2) ~= Ny
-                    error('Size of r0 is not right');
-                end
-            case 'D0'
-                d0 = varargin{i+1};
-                if (size(d0,1) ~= (N+L*2))
-                    error('initial D is inconsistent with A or Y');
-                end
-                if size(d0,2)==1
-                    d0 = repmat(d0,[1,Ny]);
-                elseif size(d0,2)~= Ny
-                    error('Size of D0 is not valid');
-                end
-            otherwise
-                % Hmmm, something wrong with the parameter string
-                error(['Unrecognized option: ''' varargin{i} '''']);
-        end
-    end
-end
+p = inputParser;
+% p.KeepUnmatched = true;
+addOptional(p,'maxiter',maxiter_default);
+addOptional(p,'verbose',verbose_default);
+addOptional(p,'tol',tol_default);
+addOptional(p,'Lambda_A',lambda_a_default);
+addOptional(p,'Lambda_C',lambda_c_default);
+addOptional(p,'Lambda_R',lambda_r_default);
+addOptional(p,'X0',x0_default);
+addOptional(p,'Z0',z0_default);
+addOptional(p,'B0',b0_default);
+addOptional(p,'R0',r0_default);
+addOptional(p,'ConcaveBase',C_default);
+addOptional(p,'c2_z',c2_z_default);
+addOptional(p,'D0',d0_default);
+addOptional(p,'rho',rho_default);
+addOptional(p,'Rhov',Rhov_default);
 
-if ~isempty(b0) && ~isempty(z0)
-    error('B0 and Z0 are both defined');
-end
+% addOptional(p,'Lambda_A',lambda_a_default,@isnumeric);
+% addOptional(p,'Lambda_C',lambda_c_default,@isnumeric);
+% addOptional(p,'Lambda_R',lambda_r_default,@isnumeric);
+% addOptional(p,'X0',x0_default, @(x) validateattributes(x,{'size',[N,Ny]},mfilename,'X0'));
+% addOptional(p,'Z0',z0_default,@isnumeric);
+% addOptional(p,'B0',b0_default, @(x) validateattributes(x,{'size',[L,Ny]},mfilename,'B0'));
+% addOptional(p,'R0',r0_default,@isnumeric);
+% addOptional(p,'ConcaveBase',C_default,@(x) validateattributes(x,{'nrow',L},mfilename,'ConcaveBase'));
+% addOptional(p,'c2_z',c2_z_default,@isnumeric);
+% addOptional(p,'D0',d0_default, @isnumeric);
+% addOptional(p,'rho',rho_default,@isnumeric);
+% addOptional(p,'Rhov',Rhov_default,@isnumeric);
+% addOptional(p,'maxiter',maxiter_default,@isscalar);
+% addOptional(p,'verbose',verbose_default,@(x) or(islogical(x),or(x==0,x==1)));
+% addOptional(p,'tol',tol_default,@isscalar);
 
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+parse(p,varargin{:});
+lambda_a = p.Results.Lambda_A;
+lambda_c = p.Results.Lambda_C;
+lambda_r = p.Results.Lambda_R;
+x0 = p.Results.X0;
+z0 = p.Results.Z0;
+b0 = p.Results.B0;
+r0 = p.Results.R0;
+d0 = p.Results.D0;
+C = p.Results.ConcaveBase;
+c2_z = p.Results.c2_z;
+rho = p.Results.rho;
+Rhov = p.Results.Rhov;
+maxiter = p.Results.maxiter;
+verbose = p.Results.verbose;
+tol = p.Results.tol;
+
+% if isvector(lambda_a), lambda_a = lambda_a(:); end
+% if isvector(lambda_c), lambda_c = lambda_c(:); end
+% if isvector(lambda_r), lambda_r = lambda_r(:); end
+% if isvector(Rhov), Rhov = Rhov(:); end
+% if isvector(rho), rho = rho(:)'; end
+% if isvector(c2_z), c2_z = c2_z(:); end
+
 % Create the bases for continuum.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if isempty(C)
     C = continuumDictionary(wv);
     % C = continuumDictionary_smooth(wv);
@@ -227,6 +210,44 @@ if isempty(C)
     C = bsxfun(@rdivide,C,s_c);
     C = C*2;
 end
+[Lc,Nc] = size(C);
+if Lc~=L
+    error('size of given base is not correct');
+end
+
+if isempty(c2_z)
+    c2_z = zeros([Nc,1]);
+    c2_z(1) = -inf; c2_z(Nc) = -inf;
+end
+
+try
+    lambda_a = lambda_a.*ones([N,Ny]);
+catch
+    error('size of lambda_a does not seem to be right');
+end
+
+try
+    lambda_c = lambda_c.*ones([Nc,Ny]);
+catch
+    error('size of lambda_c does not seem to be right');
+end
+
+try
+    lambda_r = lambda_r.*ones([L,Ny]);
+catch
+    error('size of lambda_r does not seem to be right');
+end
+
+try
+    c2_z = c2_z.*ones(Nc,1);
+catch
+    error('size of c2_z does not seem to be right');
+end
+
+if ~isempty(b0) && ~isempty(z0)
+    error('B0 and Z0 are both defined');
+end
+
 
 %%
 % pre-processing of the matrix
@@ -239,16 +260,20 @@ else
     G = [A C tau1*eye(L)];
 end
 % projection operator
-c1 = zeros([N+2*L,Ny]);
-c1(1:N,:) = lambda_a.*ones([N,Ny]);
-c1(N+L+1:N+L*2,:) = ones([L,1])./tau*tau1;
+c1 = zeros([N+Nc+L,Ny]);
+c1(1:N,:) = lambda_a;
+c1(N+1:N+Nc,:) = lambda_c;
+c1(N+Nc+1:N+Nc+L,:) = lambda_r./tau*tau1;
 
-c2 = zeros([N+2*L,1]);
-c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
+c2 = zeros([N+Nc+L,1]);
+c2(N+1:N+Nc) = c2_z;
+c2(N+Nc+1:N+Nc+L) = -inf;
+
+s0 = [x0;z0;r0];
 
 %%
 % perform main-loop
-[s,t,d,rho,Rhov,res_p,res_d] = cbp_gadmm(G,y,c1,c2,'X0',x0,'D0',d0,...
+[s,t,d,rho,Rhov,res_p,res_d] = cbp_gadmm(G,y,c1,c2,'X0',s0,'D0',d0,...
     'rho',rho,'Rhov',Rhov,'maxiter',maxiter,'tol',tol,'verbose',verbose);
 
 if Aisempty
@@ -256,7 +281,7 @@ if Aisempty
 else
     x = t(1:N,:);
 end
-z = t(N+1:N+L,:);
-r = t(N+L+1:N+L*2,:)*tau1;
+z = t(N+1:N+Nc,:);
+r = t(N+Nc+1:N+Nc*2,:)*tau1;
 
 end

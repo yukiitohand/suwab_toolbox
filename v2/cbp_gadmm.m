@@ -26,48 +26,29 @@ function [x,z,d,rho,Rhov,res_p,res_d] = cbp_gadmm(G,h,c1,c2,varargin)
 %    res_p: primal residual
 %    res_d: dual residual
 %
-%   OPTIONAL PARAMTERS
-%    'X0': initial x 
-%    'D0': initial d
-%    'rho': initial rho
-%    'RHOV': initial Rhov
-%    'maxiter': 
-%    'tol':
-%    'verbose'
+%  OPTIONAL PARAMTERS
+%    'X0': initial x (N x Ny) (default) []
+%    'D0': initial d (N x Ny) (default) []
+%    'rho': initial rho (1 x Ny) or scalar (default) 0.01
+%    'RHOV': initial Rhov (N x 1) or scalar (deault) 1
+%    'maxiter': scalar (default) 1000
+%    'tol': scalar (default) 1e-4
+%    'verbose': boolean (default) false
+
+% note
+%error('inputParser is still in progress.');
 
 %%
+% tic;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % check validity of input parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% if (nargin-length(varargin)) ~= 3
-%     error('Wrong number of required parameters');
-% end
-% mixing matrixsize
-% Aisempty = isempty(A);
-% if Aisempty
-%     N = 0;
-% else
-    [LG,N] = size(G);
-% end
-% data set size
-[L,Ny] = size(h);
-% if ~Aisempty
+[LG,N] = size(G); [L,Ny] = size(h);
 if (LG ~= L)
     error('G and h are inconsistent');
 end
-% end
-% if ~isvector(wv) || ~isnumeric(wv)
-%     error('wv must be a numeric vector.');
-% end
-% wv = wv(:);
-% Lwv = length(wv);
-% if (L~=Lwv)
-%     error('the wavelength samples wv is not correct.');
-% end
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Set the optional parameters
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% optional parameters
 % maximum number of AL iteration
 maxiter_default = 1000;
 % display only sunsal warnings
@@ -90,6 +71,13 @@ addOptional(p,'Rhov',Rhov_default);
 addOptional(p,'maxiter',maxiter_default);
 addOptional(p,'verbose',verbose_default);
 addOptional(p,'tol',tol_default);
+% addOptional(p,'X0',x0_default,@isnumeric);
+% addOptional(p,'D0',d0_default,@isnumeric);
+% addOptional(p,'rho',rho_default,@isnumeric);
+% addOptional(p,'Rhov',Rhov_default,@isnumeric);
+% addOptional(p,'maxiter',maxiter_default,@isscalar);
+% addOptional(p,'verbose',verbose_default,@(x) or(islogical(x),or(x==0,x==1)));
+% addOptional(p,'tol',tol_default,@isscalar);
 
 parse(p,varargin{:});
 x0 = p.Results.X0;
@@ -100,62 +88,53 @@ maxiter = p.Results.maxiter;
 verbose = p.Results.verbose;
 tol = p.Results.tol;
 
+% if isvector(Rhov), Rhov = Rhov(:); end
+% if isvector(rho), rho = rho(:)'; end
 
+try
+    Rhov = Rhov.*ones(N,1);
+    if size(Rhov,2)>1
+        [nrow,ncol] = size(Rhov);
+        error('the size (%d x %d) of Rhov seems wrong.',nrow,ncol);
+    end
+catch
+    [nrow,ncol] = size(Rhov);
+    error('the size (%d x %d) of Rhov seems wrong.',nrow,ncol);
+end
 
-% %%
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % Create the bases for continuum.
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% %C = continuumDictionary(L);
-% % C = concaveOperator(wv);
-% % Cinv = C\eye(L);
-% % s_c = vnorms(Cinv,1);
-% % Cinv = bsxfun(@rdivide,Cinv,s_c);
-% % C = bsxfun(@times,C,s_c');
-% % C = Cinv;
-% if isempty(C)
-%     C = continuumDictionary(wv);
-%     % C = continuumDictionary_smooth(wv);
-%     s_c = vnorms(C,1);
-%     C = bsxfun(@rdivide,C,s_c);
-%     C = C*2;
+try
+    rho = rho.*ones(1,Ny);
+    if size(rho,1)>1
+        [nrow,ncol] = size(rho);
+        error('the size (%d x %d) of Rhov seems wrong.',nrow,ncol);
+    end
+catch
+    [nrow,ncol] = size(rho);
+    error('the size (%d x %d) of rho seems wrong.',nrow,ncol);
+end
+
+% if ~isempty(x0)
+%      validateattributes(x0,{'size',[N,Ny]},mfilename,'X0');
 % end
-
+% 
+% if ~isempty(d0)
+%      validateattributes(d0,{'size',[N,Ny]},mfilename,'D0');
+% end
+% toc;
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % pre-processing for main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% rho = 0.01;
-% ynorms = vnorms(y,1);
-% tau=ynorms;
-
-% tau1 = 0.2;
-% if Aisempty
-%     G = [C tau1*eye(L)];
-% else
-%     G = [A C tau1*eye(L)];
-% end
 RhovinvGt = G'./Rhov;
 GRhovinvGt = G*RhovinvGt;
 Gpinvy = RhovinvGt * (GRhovinvGt \ h);
 PG_ort = eye(N) - RhovinvGt * (GRhovinvGt \ G);
-% projection operator
-% c1 = zeros([N+2*L,Ny]);
-% c1(1:N,:) = lambda_a.*ones([N,Ny]);
-% c1(N+L+1:N+L*2,:) = ones([L,1])./tau*tau1;
 c1rho = c1./rho./Rhov;
-
-%c2 = zeros([N+2*L,1]);
-%c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
-
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initialization
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% if ~isempty(b0)
-%     z0 = C\b0;
-% end
 if isempty(x0) && isempty(d0)
     x = Gpinvy;
     z = max(soft_thresh(x,c1rho),c2);
@@ -172,7 +151,6 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% tic
 tol_p = sqrt((N)*Ny)*tol;
 tol_d = sqrt((N)*Ny)*tol;
 k=1;
@@ -251,13 +229,6 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     k=k+1;    
 end
 
-% if Aisempty
-%     x = [];
-% else
-%     x = t(1:N,:);
-% end
-% z = t(N+1:N+L,:);
-% r = t(N+L+1:N+L*2,:)*tau1;
 d=rho.*Rhov.*d;
 
 end
