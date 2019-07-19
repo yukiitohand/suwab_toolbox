@@ -127,7 +127,7 @@ lambda_c_default = 0.0;
 lambda_r_default = 1.0;
 % spectral penalty parameter
 rho_default = 0.01*ones([1,Ny]);
-Rhov_default = ones(N+L*2,1);
+Rhov_default = 1.0;
 
 % initialization of X0
 x0_default = [];
@@ -236,6 +236,12 @@ try
     lambda_r = lambda_r.*ones([L,Ny]);
 catch
     error('size of lambda_r does not seem to be right');
+end
+
+try
+    Rhov = Rhov.*ones([N+Nc+L,1]);
+catch
+    error('size of lambda_a does not seem to be right');
 end
 
 try
