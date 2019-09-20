@@ -159,6 +159,10 @@ res_d = inf;
 onesNy1 = ones(Ny,1);
 ones1NL2 = ones(1,N);
 
+Gcond = rcond(G*G');
+thRconv_s = sqrt((1e-16./Gcond));
+thRconv_b = 1./thRconv_s;
+
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save t to be used later
     if mod(k,10) == 0 || k==1
@@ -211,10 +215,10 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         res_pv2 = sqrt(xz2*onesNy1);
         % dual feasibility
         res_dv2 = Rhov .* sqrt(zz02*rho'.^2);
-        idx3 = and(res_pv2 > 10*res_dv2, Rhov<1e10);
+        idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b);
         Rhov(idx3) = Rhov(idx3)*2;
         d(idx3,:) = d(idx3,:)/2;
-        idx4 = and(res_dv2 > 10*res_pv2, Rhov>1e-10);
+        idx4 = and(res_dv2 > 10*res_pv2, Rhov>thRconv_s);
         Rhov(idx4) = Rhov(idx4)/2;
         d(idx4,:) = d(idx4,:)*2;
         if any(idx3) || any(idx4)
