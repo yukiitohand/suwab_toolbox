@@ -1,4 +1,4 @@
-function [ x,r,d,rho,res_pv,res_dv ] = lad_gadmm_b_v2( A,y,varargin )
+function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_gadmm_b_v2( A,y,varargin )
 % [ x,b,r,cvx_opts ] = lad_gadmm_b( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
@@ -166,9 +166,11 @@ c1rho = c1 ./ rho ./ Rhov;
 
 %%
 % intialization
-s = PinvKt_invKPinvKt_y;
-t = soft_thresh(s ,c1rho);
-d = s-t;
+if isempty(x) && isempty(r)
+    s = PinvKt_invKPinvKt_y;
+    t = soft_thresh(s ,c1rho);
+    d = s-t;
+elseif ~isempty(x) && ~isempty(r) && ~isempty(
 
 
 %%
@@ -216,7 +218,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         res_pv = sqrt(ones1NL*st2);
         % dual feasibility
 %         res_dv = rho.*sqrt(Rhov'.^2*tt02);
-        res_dv = rho.*sqrt(Rhov'.^2*(ss0.*tt0));
+        res_dv = rho.*sqrt(Rhov'.^2*abs(ss0.*tt0));
         % update rho
         idx = and(res_pv > 10*res_dv, rho<1e10);
         if any(idx)
@@ -235,7 +237,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % primal feasibility
         res_pv2 = sqrt(st2*onesNy1);
         % dual feasibility
-        res_dv2 = Rhov .* sqrt((ss0.*tt0)*rho'.^2);
+        res_dv2 = Rhov .* sqrt(abs(ss0.*tt0)*rho'.^2);
         idx3 = and(res_pv2 > 10*res_dv2, Rhov<1e10);
         Rhov(idx3) = Rhov(idx3)*2;
         d(idx3,:) = d(idx3,:)/2;
@@ -261,4 +263,5 @@ end
 d = rho .* d;
 x = t(1:N,:);
 r = t(N+1:NL,:);
+cost_val = sum(abs(A*x-y),'all');
 end

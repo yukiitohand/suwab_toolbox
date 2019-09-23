@@ -109,6 +109,8 @@ b0 = [];
 r0 = [];
 % initialization of Lagrange multipliers, d0
 d0 = [];
+% initialization of s0 instead of d0
+s0 = [];
 % base matrix of concave curvature
 C = [];
 
@@ -206,6 +208,8 @@ else
                 elseif size(d0,2)~= Ny
                     error('Size of D0 is not valid');
                 end
+            case 'S0'
+                s0 = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -281,6 +285,10 @@ if ~Aisempty
         t = [x0;z0;r0];
         % t = max(soft_thresh(s+d,c1rho),c2);
         % d = d+s-t;
+    elseif ~isempty(x0) && ~isempty(z0) && ~isempty(r0) && ~isempty(s0)
+        t =[x0;z0;r0];
+        d = s0-t;
+        
     else 
         error('not implemented yet. Initialization works with all or nothing.');
     end
