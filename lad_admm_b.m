@@ -1,4 +1,4 @@
-function [ x,r,d,rho,res_pv,res_dv ] = lad_admm_b( A,y,varargin )
+function [ x,r,d,rho,res_pv,res_dv,cost_val ] = lad_admm_b( A,y,varargin )
 % [ x,b,r,cvx_opts ] = lad_admm_b( A,y,varargin)
 %   perform least absolute deviation using alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
@@ -220,4 +220,6 @@ end
 d = rho .* d;
 x = t(1:N,:);
 r = t(N+1:NL,:);
+
+cost_val = sum(abs(A*x-y),'all');
 end
