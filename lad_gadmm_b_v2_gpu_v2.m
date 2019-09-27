@@ -1,4 +1,4 @@
-function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_gadmm_b_v2_gpu( A,y,varargin )
+function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_gadmm_b_v2_gpu_v2( A,y,varargin )
 % [ x,b,r,cvx_opts ] = lad_gadmm_b( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
@@ -203,19 +203,21 @@ res_d = inf;
 onesNy1 = ones(Ny,1,'gpuArray');
 ones1NL = ones(1,NL,'gpuArray');
 
-Kcond = cond(K,2).^2;
-thRconv_s = sqrt(1e-8./Kcond);
-thRconv_b = sqrt(1e+8./Kcond);
+Kcond = cond(K).^2;
+thRconv_s = 1e-10./Kcond;
+thRconv_b = 1e+10./Kcond;
 
-cost_vals = [];
-params = [];
-Cnd_Val = cond(KPinvKt,2);
+% cost_vals = [];
+% params = [];
+% params_2 = [];
+% Cnd_Val = cond(KPinvKt,2);
+% Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
-    cost_val = sum(abs(A*t(1:N,:)-y),'all');
-    cost_vals = [cost_vals cost_val];
-    params = [params Cnd_Val];
-    
+    % cost_val = sum(abs(A*t(1:N,:)-y),'all');
+    % cost_vals = [cost_vals cost_val];
+    % params = [params Cnd_Val];
+    % params_2 = [params_2 Cnd_Val_apro];
     % save r to be used later
     if mod(k,10) == 0
         t0 = t; s0=s;
@@ -253,12 +255,16 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         res_dv = rho.*sqrt(Rhov'.^2*tt02);
         res_dv = rho.*sqrt(Rhov'.^2*abs(ss0.*tt0));
         % update rho
-        idx = and(res_pv > 10*res_dv, rho<1e10);
+        idx = and(res_pv > 10*res_dv, rho<1e5);
+        % it looks this upper bound is improtant for stable convergence. it
+        % doesn't matter 1e5, 1e3, or 1e10
         if any(idx)
             rho(idx) = rho(idx)*2;
             d(:,idx) = d(:,idx)/2;
         end
-        idx2 = res_dv > and(10*res_pv, rho>1e-10);
+        idx2 = res_dv > and(10*res_pv, rho>1e-5);
+        % it looks this lower bound is improtant for stable convergence. it
+        % doesn't matter 1e-5, 1e-3, or 1e-10
         if any(idx2)
             rho(idx2) = rho(idx2)/2;
             d(:,idx2) = d(:,idx2)*2;
@@ -271,25 +277,40 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         res_pv2 = sqrt(st2*onesNy1);
         % dual feasibility
         res_dv2 = Rhov .* sqrt(abs(ss0.*tt0)*rho'.^2);
-        idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b);
-        idx4 = and(res_dv2 > 10*res_pv2,Rhov>thRconv_s);
-        
+        % not sure how much these upper and lower bounding is affecting
+        % results.
+        idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b);      
+        idx4 = and(res_dv2 > 10*res_pv2, Rhov>thRconv_s);
+        % idx3 = res_pv2 > 10*res_dv2;
+        % idx4 = res_dv2 > 10*res_pv2;
+
         if any(idx3) || any(idx4)
-            % fprintf('yes');
-            Rhov(idx3) = Rhov(idx3)*2;
-            d(idx3,:) = d(idx3,:)/2;
-            Rhov(idx4) = Rhov(idx4)/2;
-            d(idx4,:) = d(idx4,:)*2;
+            Rhov_new = Rhov;
+            Rhov_new(idx3) = Rhov_new(idx3)*2;
+            Rhov_new(idx4) = Rhov_new(idx4)/2;
             
-            PinvKt = K'./Rhov;
-            KPinvKt = K*PinvKt;
-            PinvKt_invKPinvKt = PinvKt / KPinvKt;
-            PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-            P_ort = I_NL - PinvKt_invKPinvKt*K;
-            Cnd_Val = cond(KPinvKt,2);
-            
+            % if cond(KPinvKt,2) < 1e12
+            if Kcond*max(Rhov_new)/min(Rhov_new) < 1e8
+                % first I upper bounded with 1e13, realize 1e-8 shows
+                % better results
+                % this one 
+                % fprintf('yes');
+                Rhov = Rhov_new;
+                PinvKt = K'./Rhov;
+                KPinvKt = K*PinvKt;
+%                 invKPinvKt = KPinvKt \ eye(L);
+                PinvKt_invKPinvKt = PinvKt / KPinvKt;
+                PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
+                P_ort = I_NL - PinvKt_invKPinvKt*K;
+                
+                % Cnd_Val = cond(KPinvKt,2);
+                % Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+                d(idx3,:) = d(idx3,:)/2;
+                d(idx4,:) = d(idx4,:)*2;
+                
+                
+            end
         end
-                      
         c1rho = c1rho./Rhov;
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end

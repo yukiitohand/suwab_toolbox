@@ -1,4 +1,4 @@
-function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_gadmm_a_v2_gpu(A,y,wv,varargin)
+function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_gadmm_a_v2_gpu_v2(A,y,wv,varargin)
 % [x,z,res_p,res_d] = huwacbl1_gadmm_a(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % a generalized alternating direction method of multipliers (ADMM)
@@ -263,10 +263,16 @@ if Aisempty
 else
     T = [A C tau1*eye(L,'gpuArray')];
 end
-RhovinvTt = T'./Rhov;
-TRhovinvTt = T*RhovinvTt;
-Tpinvy = RhovinvTt * (TRhovinvTt \ y);
-PT_ort = eye(N+2*L,'gpuArray') - RhovinvTt * (TRhovinvTt \ T);
+% PinvTt = T'./Rhov;
+% TRhovinvTt = T*PinvTt;
+% Tpinvy = PinvTt * (TRhovinvTt \ y);
+I_N2L = eye(N+2*L,'gpuArray');
+% PT_ort = I_N2L - PinvTt * (TRhovinvTt \ T);
+PinvTt = T'./Rhov;
+TPinvTt = T*PinvTt;
+PinvTt_invTPinvTt = PinvTt / TPinvTt;
+Tpinvy =  PinvTt_invTPinvTt*y;
+PT_ort = I_N2L - PinvTt_invTPinvTt*T;
 % projection operator
 c1 = zeros([N+2*L,Ny],'gpuArray');
 c1(1:N,:) = lambda_a.*ones([N,Ny],'gpuArray');
@@ -316,18 +322,20 @@ res_d = inf;
 onesNy1 = ones(Ny,1,'gpuArray');
 ones1NL2 = ones(1,N+L*2,'gpuArray');
 
-% Tcond = cond(T*T',2);
-% thRconv_s = 1e-10./Tcond;
-% thRconv_b = 1e+10./Tcond;
+Tcond = cond(T*T');
+thRconv_s = 1e-10./Tcond;
+thRconv_b = 1e+10./Tcond;
 
-cost_vals = [];
-params = [];
-Cnd_Val = cond(TRhovinvTt,2);
-
+% cost_vals = [];
+% params = [];
+% params_2 = [];
+% Cnd_Val = cond(TRhovinvTt,2);
+% Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
-    cost_val = sum(abs(y-A*t(1:N,:)-C*t(N+1:N+L,:))./tau,'all')+sum(abs(lambda_a.*t(1:N,:)),'all');
-    cost_vals = [cost_vals cost_val];
-    params = [params Cnd_Val];
+    % cost_val = sum(abs(y-A*t(1:N,:)-C*t(N+1:N+L,:))./tau,'all')+sum(abs(lambda_a.*t(1:N,:)),'all');
+    % cost_vals = [cost_vals cost_val];
+    % params = [params Cnd_Val];
+    % params_2 = [params_2 Cnd_Val_apro];
     
     % save t to be used later
     if mod(k,10) == 0 || k==1
@@ -366,12 +374,14 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         end
         
         % update rho
-        idx = and(res_pv > 10*res_dv,rho<1e10);
+        idx = and(res_pv > 10*res_dv,rho<1e5);
+        % it doesn't matter 1e5 or 1e10
         if any(idx)
             rho(idx) = rho(idx)*2;
             d(:,idx) = d(:,idx)/2;
         end
-        idx2 = and(res_dv > 10*res_pv,rho>1e-10);
+        idx2 = and(res_dv > 10*res_pv,rho>1e-5);
+        % it doesn't matter 1e5 or 1e10
         if any(idx2)
             rho(idx2) = rho(idx2)/2;
             d(:,idx2) = d(:,idx2)*2;
@@ -383,25 +393,32 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         res_pv2 = sqrt(st2*onesNy1);
         % dual feasibility
         res_dv2 = Rhov .* sqrt(tt02*rho'.^2);
-        idx3 = and(res_pv2 > 10*res_dv2, Rhov<1e10); % edited
-        
-        idx4 = and(res_dv2 > 10*res_pv2, Rhov>1e-10); % edited
+        idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b); % edited
+        idx4 = and(res_dv2 > 10*res_pv2, Rhov>thRconv_s); % edited
+        % idx3 = res_pv2 > 10*res_dv2;
+        % idx4 = res_dv2 > 10*res_pv2;
         
         if any(idx3) || any(idx4)
-            Rhov(idx3) = Rhov(idx3)*2;
-            d(idx3,:) = d(idx3,:)/2;
-            Rhov(idx4) = Rhov(idx4)/2;
-            d(idx4,:) = d(idx4,:)*2;
-%                 RhovinvTt = T'./Rhov;
-%                 TRhovinvTt = T*RhovinvTt;
-%                 Tpinvy = RhovinvTt * (TRhovinvTt \ y);
-%                 PT_ort = eye(N+2*L) - RhovinvTt * (TRhovinvTt \ T);
-            PinvTt = T'./Rhov;
-            TPinvTt = T*PinvTt;
-            PinvTt_invTPinvTt = PinvTt / TPinvTt;
-            Tpinvy =  PinvTt_invTPinvTt*y;
-            PT_ort = eye(N+2*L,'gpuArray') - PinvTt_invTPinvTt*T;
-            Cnd_Val = cond(TPinvTt,2);
+            Rhov_new = Rhov;
+            Rhov_new(idx3) = Rhov_new(idx3)*2;
+            Rhov_new(idx4) = Rhov_new(idx4)/2;
+            if Tcond*max(Rhov_new)/min(Rhov_new) < 1e13
+                % for this application, 1e13 may be more suitable than 1e8.
+                % This is because the approximation of the matrix condition
+                % doesn't seem to be accurate enough (much higher than the
+                % actual condition number).
+                Rhov = Rhov_new;
+                PinvTt = T'./Rhov;
+                TPinvTt = T*PinvTt;
+                PinvTt_invTPinvTt = PinvTt / TPinvTt;
+                Tpinvy =  PinvTt_invTPinvTt*y;
+                PT_ort = I_N2L - PinvTt_invTPinvTt*T;
+                
+                d(idx3,:) = d(idx3,:)/2;
+                d(idx4,:) = d(idx4,:)*2;
+                % Cnd_Val = cond(TPinvTt,2);
+                % Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+            end
             
         end
                       
@@ -410,7 +427,6 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     k=k+1;    
 end
-
 if Aisempty
     x = [];
 else
