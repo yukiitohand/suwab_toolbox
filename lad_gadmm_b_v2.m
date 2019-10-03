@@ -84,10 +84,11 @@ verbose = false;
 tol = 1e-4;
 % spectral penalty parameter
 rho = 0.01 * ones(1,Ny);
+Rhov = ones(NL,1);
 % intial value
-x0 = 0;
-r0 = 0;
-d0 = 0;
+x0 = [];
+r0 = [];
+d0 = [];
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
@@ -110,8 +111,10 @@ else
                     error('verbose is invalid');
                 end
             case 'RHO'
-                rho = varargin{i+1};          
-            case 'S0'
+                rho = varargin{i+1}; 
+            case 'RHOV'
+                Rhov = varargin{i+1};
+           case 'X0'
                 x0 = varargin{i+1};
                 if (size(x0,1) ~= N)
                     error('initial X is inconsistent with A or y');
@@ -121,14 +124,14 @@ else
                 elseif size(x0,2)~= Ny
                     error('Size of X0 is not valid');
                 end
-            case 'T0'
+            case 'R0'
                 r0 = varargin{i+1};
-                if (size(z0,1) ~= L)
+                if (size(r0,1) ~= L)
                     error('initial r is inconsistent with A or y');
                 end
-                if size(z0,2)==1
-                    z0 = repmat(z0,[1,Ny]);
-                elseif size(z0,2)~= Ny
+                if size(r0,2)==1
+                    r0 = repmat(r0,[1,Ny]);
+                elseif size(r0,2)~= Ny
                     error('Size of r0 is not valid');
                 end
             case 'D0'
@@ -149,7 +152,7 @@ else
 end
 
 %%
-Rhov = ones(NL,1);
+% Rhov = ones(NL,1);
 % some matrix for 
 tau1 = 0.1;
 K = [A tau1*eye(L)];
@@ -157,7 +160,8 @@ PinvKt = K'./Rhov;
 KPinvKt = K*PinvKt;
 PinvKt_invKPinvKt = PinvKt / KPinvKt;
 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-P_ort = eye(NL) - PinvKt_invKPinvKt*K;
+I_NL = eye(NL);
+P_ort = I_NL - PinvKt_invKPinvKt*K;
 
 c1 = ones(NL,Ny);
 c1(1:N,:) = 0;
@@ -166,11 +170,18 @@ c1rho = c1 ./ rho ./ Rhov;
 
 %%
 % intialization
-if isempty(x) && isempty(r)
+if isempty(x0) && isempty(d0)
     s = PinvKt_invKPinvKt_y;
     t = soft_thresh(s ,c1rho);
     d = s-t;
-elseif ~isempty(x) && ~isempty(r) && ~isempty(
+elseif ~isempty(x0) && ~isempty(d0) && isempty(r0)
+    r0 = A*x0-y;
+    t = [x0;r0];
+    d = d0 ./ rho ./Rhov;
+elseif ~isempty(x0) && ~isempty(d0) && ~isempty(r0)
+    t = [x0;r0];
+    d = d0 ./ rho ./Rhov;
+end
 
 
 %%
@@ -184,10 +195,16 @@ res_d = inf;
 onesNy1 = ones(Ny,1);
 ones1NL = ones(1,NL);
 
+Kcond = cond(K).^2;
+thRconv_s = 1e-10./Kcond;
+thRconv_b = 1e+10./Kcond;
+
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save r to be used later
-    if mod(k,10) == 0 || k==1
+    if mod(k,10) == 0
         t0 = t; s0=s;
+    elseif k==1
+        t0= t; s0 = t;
     end
     
     % update s
@@ -220,39 +237,52 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         res_dv = rho.*sqrt(Rhov'.^2*tt02);
         res_dv = rho.*sqrt(Rhov'.^2*abs(ss0.*tt0));
         % update rho
-        idx = and(res_pv > 10*res_dv, rho<1e10);
+        idx = and(res_pv > 10*res_dv, rho<1e5);
         if any(idx)
             rho(idx) = rho(idx)*2;
             d(:,idx) = d(:,idx)/2;
         end
-        idx2 = res_dv > and(10*res_pv, rho>1e-10);
+        idx2 = res_dv > and(10*res_pv, rho>1e-5);
         if any(idx2)
             rho(idx2) = rho(idx2)/2;
             d(:,idx2) = d(:,idx2)*2;
         end
-        c1rho = c1./rho; 
-        % Rho for different dimension
+        c1rho = c1./rho;
         
         % Rho for different dimension
         % primal feasibility
         res_pv2 = sqrt(st2*onesNy1);
         % dual feasibility
         res_dv2 = Rhov .* sqrt(abs(ss0.*tt0)*rho'.^2);
-        idx3 = and(res_pv2 > 10*res_dv2, Rhov<1e10);
-        Rhov(idx3) = Rhov(idx3)*2;
-        d(idx3,:) = d(idx3,:)/2;
-        idx4 = and(res_dv2 > 10*res_pv2,Rhov>1e-10);
-        Rhov(idx4) = Rhov(idx4)/2;
-        d(idx4,:) = d(idx4,:)*2;
+        idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b);
+        % Rhov(idx3) = Rhov(idx3)*2;
+        % d(idx3,:) = d(idx3,:)/2;
+        idx4 = and(res_dv2 > 10*res_pv2,Rhov>thRconv_s);
+        % Rhov(idx4) = Rhov(idx4)/2;
+        % d(idx4,:) = d(idx4,:)*2;
         if any(idx3) || any(idx4)
-            PinvKt = K'./Rhov;
-            KPinvKt = K*PinvKt;
+            Rhov_new = Rhov;
+            Rhov_new(idx3) = Rhov_new(idx3)*2;
+            Rhov_new(idx4) = Rhov_new(idx4)/2;
+            if Kcond*max(Rhov_new)/min(Rhov_new) < 1e8
+                % first I upper bounded with 1e13, realize 1e-8 shows
+                % better results
+                % this one 
+                % fprintf('yes');
+                Rhov = Rhov_new;
+                PinvKt = K'./Rhov;
+                KPinvKt = K*PinvKt;
 %                 invKPinvKt = KPinvKt \ eye(L);
-            PinvKt_invKPinvKt = PinvKt / KPinvKt;
-            PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-            P_ort = eye(NL) - PinvKt_invKPinvKt*K;
-        end
-                      
+                PinvKt_invKPinvKt = PinvKt / KPinvKt;
+                PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
+                P_ort = I_NL - PinvKt_invKPinvKt*K;
+                
+                % Cnd_Val = cond(KPinvKt,2);
+                % Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+                d(idx3,:) = d(idx3,:)/2;
+                d(idx4,:) = d(idx4,:)*2;
+            end  
+        end            
         c1rho = c1rho./Rhov;
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end

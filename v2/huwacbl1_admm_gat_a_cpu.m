@@ -257,7 +257,7 @@ if Aisempty
 else
     T = [A C tau1*eye(L)];
 end
-I_N2L = eye(N+2*L,'gpuArray');
+I_N2L = eye(N+2*L);
 PinvTt = T'./Rhov;
 TPinvTt = T*PinvTt;
 PinvTt_invTPinvTt = PinvTt / TPinvTt;
@@ -381,6 +381,9 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         %Rhov(idx4) = Rhov(idx4)/2;
         %d(idx4,:) = d(idx4,:)*2;
         if any(idx3) || any(idx4)
+            Rhov_new = Rhov;
+            Rhov_new(idx3) = Rhov_new(idx3)*2;
+            Rhov_new(idx4) = Rhov_new(idx4)/2;
             if Tcond*max(Rhov_new)/min(Rhov_new) < 1e13
                 % for this application, 1e13 may be more suitable than 1e8.
                 % This is because the approximation of the matrix condition
