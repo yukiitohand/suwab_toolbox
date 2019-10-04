@@ -1,5 +1,5 @@
-function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_admm_gat_a_cpu(A,y,wv,varargin)
-% [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_admm_gat_a_cpu(A,y,wv,varargin)
+function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_admm_gat_a(A,y,wv,varargin)
+% [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_admm_gat_a(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers with generalized augmented 
 % terms(ADMM). This function is almost identical to huwacbl1_gadmm_a_v2.m.
