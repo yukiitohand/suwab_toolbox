@@ -420,12 +420,12 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         end
         
         % update rho
-        idx = and(res_pv > 10*res_dv,rho<1e10);
+        idx = and(res_pv > 10*res_dv,rho<1e5);
         if any(idx)
             rho(idx) = rho(idx)*2;
             d(:,idx) = d(:,idx)/2;
         end
-        idx2 = and(res_dv > 10*res_pv,rho>1e-10);
+        idx2 = and(res_dv > 10*res_pv,rho>1e-5);
         if any(idx2)
             rho(idx2) = rho(idx2)/2;
             d(:,idx2) = d(:,idx2)*2;
