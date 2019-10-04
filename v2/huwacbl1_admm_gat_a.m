@@ -1,4 +1,4 @@
-function [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_admm_gat_a_cpu(A,y,wv,varargin)
+function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_admm_gat_a_cpu(A,y,wv,varargin)
 % [x,z,C,r,d,rho,Rhov,res_p,res_d] = huwacbl1_admm_gat_a_cpu(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % alternating direction method of multipliers with generalized augmented 
@@ -117,6 +117,16 @@ s0 = [];
 % base matrix of concave curvature
 C = [];
 
+% Precision
+precision = 'double';
+
+% wheter or not to use GPU or not
+gpu = false;
+
+% DEBUG mode outputs the figure of the cost function and Matrix condition
+% number.
+isdebug = false;
+
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
 else
@@ -213,6 +223,12 @@ else
                 end
             case 'S0'
                 s0 = varargin{i+1};
+            case 'PRECISION'
+                precision = varargin{i+1};
+            case 'DEBUG'
+                isdebug = varargin{i+1};
+            case 'GPU'
+                gpu = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -223,6 +239,7 @@ end
 if ~isempty(b0) && ~isempty(z0)
     error('B0 and Z0 are both defined');
 end
+
 %toc;
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -241,6 +258,21 @@ if isempty(C)
     s_c = vnorms(C,1);
     C = bsxfun(@rdivide,C,s_c);
     C = C*2;
+    if strcmpi(precision,'single')
+        C = single(C);
+    end
+end
+
+if gpu
+    gpu_varargin = {'gpuArray'};
+    A = gpuArray(A); y = gpuArray(y); C = gpuArray(C);
+    rho = gpuArray(rho); Rhov = gpuArray(Rhov);
+else
+    gpu_varargin = {};
+end
+
+if strcmpi(precision,'precision')
+    rho = single(rho); Rhov = single(Rhov);
 end
 
 %%
@@ -250,26 +282,29 @@ end
 % rho = 0.01;
 ynorms = vnorms(y,1);
 tau=ynorms;
+if strcmpi(precision,'single')
+    tau=single(tau);
+end
 
 tau1 = 0.2;
 if Aisempty
-    T = [C tau1*eye(L)];
+    T = [C tau1*eye(L,precision,gpu_varargin)];
 else
-    T = [A C tau1*eye(L)];
+    T = [A C tau1*eye(L,precision,gpu_varargin)];
 end
-I_N2L = eye(N+2*L);
+I_N2L = eye(N+2*L,precision,gpu_varargin);
 PinvTt = T'./Rhov;
 TPinvTt = T*PinvTt;
 PinvTt_invTPinvTt = PinvTt / TPinvTt;
 Tpinvy =  PinvTt_invTPinvTt*y;
 PT_ort = I_N2L - PinvTt_invTPinvTt*T;
 % projection operator
-c1 = zeros([N+2*L,Ny]);
-c1(1:N,:) = lambda_a.*ones([N,Ny]);
-c1(N+L+1:N+L*2,:) = ones([L,1])./tau*tau1;
+c1 = zeros([N+2*L,Ny],precision,gpu_varargin);
+c1(1:N,:) = lambda_a.*ones([N,Ny],precision,gpu_varargin);
+c1(N+L+1:N+L*2,:) = ones([L,1],precision,gpu_varargin)./tau*tau1;
 c1rho = c1./rho./Rhov;
 
-c2 = zeros([N+2*L,1]);
+c2 = zeros([N+2*L,1],precision,gpu_varargin);
 c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
 
 
@@ -286,13 +321,17 @@ if ~Aisempty
         t = max(soft_thresh(s,c1rho),c2);
         d = s-t;
     elseif ~isempty(x0) && ~isempty(z0) && ~isempty(r0) && ~isempty(d0)
+        if gpu
+            x0 = gpuArray(x0); z0 = gpuArray(z0);
+            d0 = gpuArray(d0); r0 = gpuArray(r0);
+        end
         d=d0./rho./Rhov;
         t = [x0;z0;r0];
         % t = max(soft_thresh(s+d,c1rho),c2);
         % d = d+s-t;
-    elseif ~isempty(x0) && ~isempty(z0) && ~isempty(r0) && ~isempty(s0)
-        t =[x0;z0;r0];
-        d = s0-t;
+%     elseif ~isempty(x0) && ~isempty(z0) && ~isempty(r0) && ~isempty(s0)
+%         t =[x0;z0;r0];
+%         d = s0-t;
         
     else 
         error('not implemented yet. Initialization works with all or nothing.');
@@ -301,6 +340,7 @@ else
     error('not implemented yet');
 end
 
+clear x0 z0 r0 d0
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -312,14 +352,37 @@ tol_d = sqrt((L*2+N)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
-onesNy1 = ones(Ny,1);
-ones1NL2 = ones(1,N+L*2);
+onesNy1 = ones(Ny,1,precision,gpu_varargin);
+ones1NL2 = ones(1,N+L*2,precision,gpu_varargin);
 
 Tcond = cond(T*T');
 thRconv_s = 1e-10./Tcond;
 thRconv_b = 1e+10./Tcond;
 
+switch lower(precision)
+    case 'double'
+        th_cond = 1e-13;
+    case 'single'
+        th_cond = 1e-6;
+end
+
+if isdebug
+    cost_vals = [];
+    params = [];
+    params_2 = [];
+    Cnd_Val = cond(TPinvTt,2);
+    Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+end
+
+
+
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
+    if isdebug
+        cost_val = sum(abs(y-A*t(1:N,:)-C*t(N+1:N+L,:))./tau,'all')+sum(abs(lambda_a.*t(1:N,:)),'all');
+        cost_vals = [cost_vals cost_val];
+        params = [params Cnd_Val];
+        params_2 = [params_2 Cnd_Val_apro];
+    end
     % save t to be used later
     if mod(k,10) == 0 || k==1
         t0 = t;
@@ -345,7 +408,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
-    if (mod(k,10) == 0 || k==1) && k<500
+    if (mod(k,10) == 0 || k==1)
 %         st = s-t; tt0 = t-t0;
         st2 = st.^2;
         % primal feasibility
@@ -357,12 +420,12 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         end
         
         % update rho
-        idx = and(res_pv > 10*res_dv,rho<1e10);
+        idx = and(res_pv > 10*res_dv,rho<1e5);
         if any(idx)
             rho(idx) = rho(idx)*2;
             d(:,idx) = d(:,idx)/2;
         end
-        idx2 = and(res_dv > 10*res_pv,rho>1e-10);
+        idx2 = and(res_dv > 10*res_pv,rho>1e-5);
         if any(idx2)
             rho(idx2) = rho(idx2)/2;
             d(:,idx2) = d(:,idx2)*2;
@@ -384,7 +447,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
-            if Tcond*max(Rhov_new)/min(Rhov_new) < 1e13
+            if Tcond*max(Rhov_new)/min(Rhov_new) < th_cond
                 % for this application, 1e13 may be more suitable than 1e8.
                 % This is because the approximation of the matrix condition
                 % doesn't seem to be accurate enough (much higher than the
@@ -398,8 +461,10 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 
                 d(idx3,:) = d(idx3,:)/2;
                 d(idx4,:) = d(idx4,:)*2;
-                % Cnd_Val = cond(TPinvTt,2);
-                % Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+                if isdebug
+                    Cnd_Val = cond(TPinvTt,2);
+                    Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+                end
             end
         end
                       
@@ -407,6 +472,11 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end
     k=k+1;    
+end
+
+if isdebug
+    figure; plot(cost_vals);
+    yyaxis right; plot(params); hold on; plot(params_2);
 end
 
 if Aisempty
@@ -417,4 +487,11 @@ end
 z = t(N+1:N+L,:);
 r = t(N+L+1:N+L*2,:)*tau1;
 d=rho.*Rhov.*d;
+
+if gpu
+    [x,z,C,r,d,rho,Rhov] = gather(x,z,C,r,d,rho,Rhov);
+end
+
+cost_val = sum(abs(y-A*x-C*z)./tau,'all')+sum(abs(lambda_a.*x),'all');
+
 end

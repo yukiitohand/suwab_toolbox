@@ -1,5 +1,5 @@
-function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_gadmm_b_v2( A,y,varargin )
-% [ x,b,r,cvx_opts ] = lad_gadmm_b( A,y,varargin)
+function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargin )
+% [ x,b,r,cvx_opts ] =lad_admm_gat_b( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
 %     Input Parameters
@@ -46,6 +46,9 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_gadmm_b_v2( A,y,varargi
 %
 %   ==== Update History ===================================================
 %   Mar 18th, 2018  Yuki Itoh: Created
+%   Oct 04th, 2019  Yuki Itoh: Supports GPU, spectral penalty parameters
+%                              are sufficiently safeguarded. Single
+%                              precition mode is also supported.
 
 
 
@@ -78,7 +81,7 @@ NL = N+L;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % maximum number of AL iteration
 maxiter = 1000;
-% display only sunsal warnings
+% display only warnings
 verbose = false;
 % tolerance for the primal and dual residues
 tol = 1e-4;
@@ -89,6 +92,17 @@ Rhov = ones(NL,1);
 x0 = [];
 r0 = [];
 d0 = [];
+
+% Precision
+precision = 'double';
+
+% wheter or not to use GPU or not
+gpu = false;
+
+% DEBUG mode outputs the figure of the cost function and Matrix condition
+% number.
+isdebug = false;
+
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
@@ -144,6 +158,12 @@ else
                 elseif size(d0,2)~= Ny
                     error('Size of D0 is not valid');
                 end
+            case 'PRECISION'
+                precision = varargin{i+1};
+            case 'DEBUG'
+                isdebug = varargin{i+1};
+            case 'GPU'
+                gpu = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -151,22 +171,36 @@ else
     end
 end
 
+if gpu
+    gpu_varargin = {'gpuArray'};
+    A = gpuArray(A); y = gpuArray(y);
+    rho = gpuArray(rho); Rhov = gpuArray(Rhov);
+else
+    gpu_varargin = {};
+end
+
+if strcmpi(precision,'precision')
+    rho = single(rho); Rhov = single(Rhov);
+end
+
 %%
 % Rhov = ones(NL,1);
 % some matrix for 
 tau1 = 0.1;
-K = [A tau1*eye(L)];
+K = [A tau1*eye(L,precision,gpu_varargin{:})];
 PinvKt = K'./Rhov;
 KPinvKt = K*PinvKt;
 PinvKt_invKPinvKt = PinvKt / KPinvKt;
 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-I_NL = eye(NL);
+I_NL = eye(NL,precision,gpu_varargin);
 P_ort = I_NL - PinvKt_invKPinvKt*K;
 
-c1 = ones(NL,Ny);
+c1 = ones(NL,Ny,precision,gpu_varargin{:});
 c1(1:N,:) = 0;
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;
+
+clear A
 
 %%
 % intialization
@@ -175,14 +209,21 @@ if isempty(x0) && isempty(d0)
     t = soft_thresh(s ,c1rho);
     d = s-t;
 elseif ~isempty(x0) && ~isempty(d0) && isempty(r0)
+    if gpu
+        x0 = gpuArray(x0); d0 = gpuArray(d0);
+    end
     r0 = A*x0-y;
     t = [x0;r0];
     d = d0 ./ rho ./Rhov;
 elseif ~isempty(x0) && ~isempty(d0) && ~isempty(r0)
+    if gpu
+        x0 = gpuArray(x0); d0 = gpuArray(d0); r0 = gpuArray(r0);
+    end
     t = [x0;r0];
     d = d0 ./ rho ./Rhov;
 end
 
+clear x0 d0 r0
 
 %%
 % main loop
@@ -192,15 +233,36 @@ tol_d = sqrt((L)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
-onesNy1 = ones(Ny,1);
-ones1NL = ones(1,NL);
+onesNy1 = ones(Ny,1,precision,gpu_varargin{:});
+ones1NL = ones(1,NL,precision,gpu_varargin{:});
 
 Kcond = cond(K).^2;
 thRconv_s = 1e-10./Kcond;
 thRconv_b = 1e+10./Kcond;
+% set a safeguard parameter for 
+switch lower(precision)
+    case 'double'
+        th_cond = 1e-8;
+    case 'single'
+        th_cond = 1e-4;
+end
 
-while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
-    % save r to be used later
+if isdebug
+    cost_vals = [];
+    params = [];
+    params_2 = [];
+    Cnd_Val = cond(KRhovinvKt,2);
+    Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+end
+
+while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
+    if isdebug
+        cost_val = sum(abs(A*t(1:N,:)-y),'all');
+        cost_vals = [cost_vals cost_val];
+        params = [params Cnd_Val];
+        params_2 = [params_2 Cnd_Val_apro];
+    end
+    % save t to be used later
     if mod(k,10) == 0
         t0 = t; s0=s;
     elseif k==1
@@ -228,7 +290,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
-    if (mod(k,10) == 0 || k==1) && k<500
+    if (mod(k,10) == 0 || k==1)
 %         st = s-t; tt0 = t-t0;
         st2 = st.^2; ss0 = s-s0; tt0 = t-t0;
         % primal feasibility
@@ -264,7 +326,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
-            if Kcond*max(Rhov_new)/min(Rhov_new) < 1e8
+            if Kcond*max(Rhov_new)/min(Rhov_new) < th_cond
                 % first I upper bounded with 1e13, realize 1e-8 shows
                 % better results
                 % this one 
@@ -277,10 +339,12 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
                 P_ort = I_NL - PinvKt_invKPinvKt*K;
                 
-                % Cnd_Val = cond(KPinvKt,2);
-                % Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
                 d(idx3,:) = d(idx3,:)/2;
                 d(idx4,:) = d(idx4,:)*2;
+                if isdebug
+                    Cnd_Val = cond(KPinvKt,2);
+                    Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+                end
             end  
         end            
         c1rho = c1rho./Rhov;
@@ -288,10 +352,18 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     k=k+1;    
 end
+if isdebug
+    figure; plot(cost_vals);
+    yyaxis right; plot(params); hold on; plot(params_2);
+end
 
 % reverse the dual variable to non-scaling form.
-d = rho .* d;
+d = rho .* Rhov .* d;
 x = t(1:N,:);
 r = t(N+1:NL,:);
+
+if gpu
+    [d,x,r,rho,Rhov] = gather(d,x,r,rho,Rhov);
+end
 cost_val = sum(abs(A*x-y),'all');
 end
