@@ -288,23 +288,23 @@ end
 
 tau1 = 0.2;
 if Aisempty
-    T = [C tau1*eye(L,precision,gpu_varargin)];
+    T = [C tau1*eye(L,precision,gpu_varargin{:})];
 else
-    T = [A C tau1*eye(L,precision,gpu_varargin)];
+    T = [A C tau1*eye(L,precision,gpu_varargin{:})];
 end
-I_N2L = eye(N+2*L,precision,gpu_varargin);
+I_N2L = eye(N+2*L,precision,gpu_varargin{:});
 PinvTt = T'./Rhov;
 TPinvTt = T*PinvTt;
 PinvTt_invTPinvTt = PinvTt / TPinvTt;
 Tpinvy =  PinvTt_invTPinvTt*y;
 PT_ort = I_N2L - PinvTt_invTPinvTt*T;
 % projection operator
-c1 = zeros([N+2*L,Ny],precision,gpu_varargin);
-c1(1:N,:) = lambda_a.*ones([N,Ny],precision,gpu_varargin);
-c1(N+L+1:N+L*2,:) = ones([L,1],precision,gpu_varargin)./tau*tau1;
+c1 = zeros([N+2*L,Ny],precision,gpu_varargin{:});
+c1(1:N,:) = lambda_a.*ones([N,Ny],precision,gpu_varargin{:});
+c1(N+L+1:N+L*2,:) = ones([L,1],precision,gpu_varargin{:})./tau*tau1;
 c1rho = c1./rho./Rhov;
 
-c2 = zeros([N+2*L,1],precision,gpu_varargin);
+c2 = zeros([N+2*L,1],precision,gpu_varargin{:});
 c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
 
 
@@ -352,8 +352,8 @@ tol_d = sqrt((L*2+N)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
-onesNy1 = ones(Ny,1,precision,gpu_varargin);
-ones1NL2 = ones(1,N+L*2,precision,gpu_varargin);
+onesNy1 = ones(Ny,1,precision,gpu_varargin{:});
+ones1NL2 = ones(1,N+L*2,precision,gpu_varargin{:});
 
 Tcond = cond(T*T');
 thRconv_s = 1e-10./Tcond;

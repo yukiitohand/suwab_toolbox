@@ -192,7 +192,7 @@ PinvKt = K'./Rhov;
 KPinvKt = K*PinvKt;
 PinvKt_invKPinvKt = PinvKt / KPinvKt;
 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-I_NL = eye(NL,precision,gpu_varargin);
+I_NL = eye(NL,precision,gpu_varargin{:});
 P_ort = I_NL - PinvKt_invKPinvKt*K;
 
 c1 = ones(NL,Ny,precision,gpu_varargin{:});
@@ -200,7 +200,7 @@ c1(1:N,:) = 0;
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;
 
-clear A
+% clear A
 
 %%
 % intialization
