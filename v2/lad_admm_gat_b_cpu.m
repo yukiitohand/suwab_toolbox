@@ -1,5 +1,5 @@
-function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b_cpu( A,y,varargin )
-% [ x,b,r,cvx_opts ] =lad_admm_gat_b_cpu( A,y,varargin)
+function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargin )
+% [ x,b,r,cvx_opts ] =lad_admm_gat_b( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
 %     Input Parameters
@@ -78,7 +78,7 @@ NL = N+L;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % maximum number of AL iteration
 maxiter = 1000;
-% display only sunsal warnings
+% display only warnings
 verbose = false;
 % tolerance for the primal and dual residues
 tol = 1e-4;
@@ -90,8 +90,16 @@ x0 = [];
 r0 = [];
 d0 = [];
 
+% Precision
 precision = 'double';
+
+% wheter or not to use GPU or not
+gpu = false;
+
+% DEBUG mode outputs the figure of the cost function and Matrix condition
+% number.
 isdebug = false;
+
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
@@ -151,6 +159,8 @@ else
                 precision = varargin{i+1};
             case 'DEBUG'
                 isdebug = varargin{i+1};
+            case 'GPU'
+                gpu = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -158,22 +168,31 @@ else
     end
 end
 
+if gpu
+    gpu_varargin = {'gpuArray'};
+    A = gpuArray(A); y = gpuArray(y);
+else
+    gpu_varargin = {};
+end
+
 %%
 % Rhov = ones(NL,1);
 % some matrix for 
 tau1 = 0.1;
-K = [A tau1*eye(L,precision)];
+K = [A tau1*eye(L,precision,gpu_varargin{:})];
 PinvKt = K'./Rhov;
 KPinvKt = K*PinvKt;
 PinvKt_invKPinvKt = PinvKt / KPinvKt;
 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-I_NL = eye(NL,precision);
+I_NL = eye(NL,precision,gpu_varargin);
 P_ort = I_NL - PinvKt_invKPinvKt*K;
 
-c1 = ones(NL,Ny,precision);
+c1 = ones(NL,Ny,precision,gpu_varargin{:});
 c1(1:N,:) = 0;
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;
+
+clear A
 
 %%
 % intialization
@@ -182,14 +201,21 @@ if isempty(x0) && isempty(d0)
     t = soft_thresh(s ,c1rho);
     d = s-t;
 elseif ~isempty(x0) && ~isempty(d0) && isempty(r0)
+    if gpu
+        x0 = gpuArray(x0); d0 = gpuArray(d0);
+    end
     r0 = A*x0-y;
     t = [x0;r0];
     d = d0 ./ rho ./Rhov;
 elseif ~isempty(x0) && ~isempty(d0) && ~isempty(r0)
+    if gpu
+        x0 = gpuArray(x0); d0 = gpuArray(d0); r0 = gpuArray(r0);
+    end
     t = [x0;r0];
     d = d0 ./ rho ./Rhov;
 end
 
+clear x0 d0 r0
 
 %%
 % main loop
@@ -199,12 +225,19 @@ tol_d = sqrt((L)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
-onesNy1 = ones(Ny,1,precision);
-ones1NL = ones(1,NL,precision);
+onesNy1 = ones(Ny,1,precision,gpu_varargin{:});
+ones1NL = ones(1,NL,precision,gpu_varargin{:});
 
 Kcond = cond(K).^2;
 thRconv_s = 1e-10./Kcond;
 thRconv_b = 1e+10./Kcond;
+% set a safeguard parameter for 
+switch lower(precision)
+    case 'double'
+        th_cond = 1e-8;
+    case 'single'
+        th_cond = 1e-4;
+end
 
 if isdebug
     cost_vals = [];
@@ -214,13 +247,6 @@ if isdebug
     Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
 end
 
-switch lower(precision)
-    case 'double'
-        th_cond = 1e-8;
-    case 'single'
-        th_cond = 1e-4;
-end
-
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     if isdebug
         cost_val = sum(abs(A*t(1:N,:)-y),'all');
@@ -228,7 +254,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         params = [params Cnd_Val];
         params_2 = [params_2 Cnd_Val_apro];
     end
-    % save r to be used later
+    % save t to be used later
     if mod(k,10) == 0
         t0 = t; s0=s;
     elseif k==1
@@ -327,5 +353,9 @@ end
 d = rho .* d;
 x = t(1:N,:);
 r = t(N+1:NL,:);
+
+if gpu
+    [d,x,r,rho,Rhov] = gather(d,x,r,rho,Rhov);
+end
 cost_val = sum(abs(A*x-y),'all');
 end
