@@ -117,6 +117,9 @@ s0 = [];
 % base matrix of concave curvature
 C = [];
 
+precision = 'double';
+isdebug = false;
+
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
 else
@@ -213,6 +216,10 @@ else
                 end
             case 'S0'
                 s0 = varargin{i+1};
+            case 'PRECISION'
+                precision = varargin{i+1};
+            case 'DEBUG'
+                isdebug = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -241,6 +248,9 @@ if isempty(C)
     s_c = vnorms(C,1);
     C = bsxfun(@rdivide,C,s_c);
     C = C*2;
+    if strcmpi(precision,'single')
+        C = single(C);
+    end
 end
 
 %%
@@ -250,26 +260,29 @@ end
 % rho = 0.01;
 ynorms = vnorms(y,1);
 tau=ynorms;
+if strcmpi(precision,'single')
+    tau=single(tau);
+end
 
 tau1 = 0.2;
 if Aisempty
-    T = [C tau1*eye(L)];
+    T = [C tau1*eye(L,precision)];
 else
-    T = [A C tau1*eye(L)];
+    T = [A C tau1*eye(L,precision)];
 end
-I_N2L = eye(N+2*L);
+I_N2L = eye(N+2*L,precision);
 PinvTt = T'./Rhov;
 TPinvTt = T*PinvTt;
 PinvTt_invTPinvTt = PinvTt / TPinvTt;
 Tpinvy =  PinvTt_invTPinvTt*y;
 PT_ort = I_N2L - PinvTt_invTPinvTt*T;
 % projection operator
-c1 = zeros([N+2*L,Ny]);
-c1(1:N,:) = lambda_a.*ones([N,Ny]);
-c1(N+L+1:N+L*2,:) = ones([L,1])./tau*tau1;
+c1 = zeros([N+2*L,Ny],precision);
+c1(1:N,:) = lambda_a.*ones([N,Ny],precision);
+c1(N+L+1:N+L*2,:) = ones([L,1],precision)./tau*tau1;
 c1rho = c1./rho./Rhov;
 
-c2 = zeros([N+2*L,1]);
+c2 = zeros([N+2*L,1],precision);
 c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
 
 
@@ -312,14 +325,35 @@ tol_d = sqrt((L*2+N)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
-onesNy1 = ones(Ny,1);
-ones1NL2 = ones(1,N+L*2);
+onesNy1 = ones(Ny,1,precision);
+ones1NL2 = ones(1,N+L*2,precision);
 
 Tcond = cond(T*T');
 thRconv_s = 1e-10./Tcond;
 thRconv_b = 1e+10./Tcond;
 
+if isdebug
+    cost_vals = [];
+    params = [];
+    params_2 = [];
+    Cnd_Val = cond(TPinvTt,2);
+    Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+end
+
+switch lower(precision)
+    case 'double'
+        th_cond = 1e-13;
+    case 'single'
+        th_cond = 1e-6;
+end
+
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
+    if isdebug
+        cost_val = sum(abs(y-A*t(1:N,:)-C*t(N+1:N+L,:))./tau,'all')+sum(abs(lambda_a.*t(1:N,:)),'all');
+        cost_vals = [cost_vals cost_val];
+        params = [params Cnd_Val];
+        params_2 = [params_2 Cnd_Val_apro];
+    end
     % save t to be used later
     if mod(k,10) == 0 || k==1
         t0 = t;
@@ -345,7 +379,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
-    if (mod(k,10) == 0 || k==1) && k<500
+    if (mod(k,10) == 0 || k==1)
 %         st = s-t; tt0 = t-t0;
         st2 = st.^2;
         % primal feasibility
@@ -384,7 +418,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
-            if Tcond*max(Rhov_new)/min(Rhov_new) < 1e13
+            if Tcond*max(Rhov_new)/min(Rhov_new) < th_cond
                 % for this application, 1e13 may be more suitable than 1e8.
                 % This is because the approximation of the matrix condition
                 % doesn't seem to be accurate enough (much higher than the
@@ -398,8 +432,10 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 
                 d(idx3,:) = d(idx3,:)/2;
                 d(idx4,:) = d(idx4,:)*2;
-                % Cnd_Val = cond(TPinvTt,2);
-                % Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+                if isdebug
+                    Cnd_Val = cond(TPinvTt,2);
+                    Cnd_Val_apro = Tcond*max(Rhov)/min(Rhov);
+                end
             end
         end
                       
@@ -407,6 +443,11 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end
     k=k+1;    
+end
+
+if isdebug
+    figure; plot(cost_vals);
+    yyaxis right; plot(params); hold on; plot(params_2);
 end
 
 if Aisempty

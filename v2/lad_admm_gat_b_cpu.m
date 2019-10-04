@@ -1,5 +1,5 @@
-function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_gadmm_b_v2( A,y,varargin )
-% [ x,b,r,cvx_opts ] = lad_gadmm_b( A,y,varargin)
+function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b_cpu( A,y,varargin )
+% [ x,b,r,cvx_opts ] =lad_admm_gat_b_cpu( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
 %     Input Parameters
@@ -90,6 +90,9 @@ x0 = [];
 r0 = [];
 d0 = [];
 
+precision = 'double';
+isdebug = false;
+
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
 else
@@ -144,6 +147,10 @@ else
                 elseif size(d0,2)~= Ny
                     error('Size of D0 is not valid');
                 end
+            case 'PRECISION'
+                precision = varargin{i+1};
+            case 'DEBUG'
+                isdebug = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -155,15 +162,15 @@ end
 % Rhov = ones(NL,1);
 % some matrix for 
 tau1 = 0.1;
-K = [A tau1*eye(L)];
+K = [A tau1*eye(L,precision)];
 PinvKt = K'./Rhov;
 KPinvKt = K*PinvKt;
 PinvKt_invKPinvKt = PinvKt / KPinvKt;
 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-I_NL = eye(NL);
+I_NL = eye(NL,precision);
 P_ort = I_NL - PinvKt_invKPinvKt*K;
 
-c1 = ones(NL,Ny);
+c1 = ones(NL,Ny,precision);
 c1(1:N,:) = 0;
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;
@@ -192,14 +199,35 @@ tol_d = sqrt((L)*Ny)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
-onesNy1 = ones(Ny,1);
-ones1NL = ones(1,NL);
+onesNy1 = ones(Ny,1,precision);
+ones1NL = ones(1,NL,precision);
 
 Kcond = cond(K).^2;
 thRconv_s = 1e-10./Kcond;
 thRconv_b = 1e+10./Kcond;
 
-while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
+if isdebug
+    cost_vals = [];
+    params = [];
+    params_2 = [];
+    Cnd_Val = cond(KRhovinvKt,2);
+    Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+end
+
+switch lower(precision)
+    case 'double'
+        th_cond = 1e-8;
+    case 'single'
+        th_cond = 1e-4;
+end
+
+while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
+    if isdebug
+        cost_val = sum(abs(A*t(1:N,:)-y),'all');
+        cost_vals = [cost_vals cost_val];
+        params = [params Cnd_Val];
+        params_2 = [params_2 Cnd_Val_apro];
+    end
     % save r to be used later
     if mod(k,10) == 0
         t0 = t; s0=s;
@@ -228,7 +256,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
-    if (mod(k,10) == 0 || k==1) && k<500
+    if (mod(k,10) == 0 || k==1)
 %         st = s-t; tt0 = t-t0;
         st2 = st.^2; ss0 = s-s0; tt0 = t-t0;
         % primal feasibility
@@ -264,7 +292,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
-            if Kcond*max(Rhov_new)/min(Rhov_new) < 1e8
+            if Kcond*max(Rhov_new)/min(Rhov_new) < th_cond
                 % first I upper bounded with 1e13, realize 1e-8 shows
                 % better results
                 % this one 
@@ -277,16 +305,22 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
                 P_ort = I_NL - PinvKt_invKPinvKt*K;
                 
-                % Cnd_Val = cond(KPinvKt,2);
-                % Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
                 d(idx3,:) = d(idx3,:)/2;
                 d(idx4,:) = d(idx4,:)*2;
+                if isdebug
+                    Cnd_Val = cond(KPinvKt,2);
+                    Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+                end
             end  
         end            
         c1rho = c1rho./Rhov;
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end
     k=k+1;    
+end
+if isdebug
+    figure; plot(cost_vals);
+    yyaxis right; plot(params); hold on; plot(params_2);
 end
 
 % reverse the dual variable to non-scaling form.
