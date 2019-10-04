@@ -425,7 +425,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         c1rho = c1rho./Rhov;
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end
-    k=k+1;    
+    k=k+1;
 end
 if Aisempty
     x = [];
