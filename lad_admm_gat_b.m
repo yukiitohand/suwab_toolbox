@@ -46,6 +46,9 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %
 %   ==== Update History ===================================================
 %   Mar 18th, 2018  Yuki Itoh: Created
+%   Oct 04th, 2019  Yuki Itoh: Supports GPU, spectral penalty parameters
+%                              are sufficiently safeguarded. Single
+%                              precition mode is also supported.
 
 
 
@@ -171,8 +174,13 @@ end
 if gpu
     gpu_varargin = {'gpuArray'};
     A = gpuArray(A); y = gpuArray(y);
+    rho = gpuArray(rho); Rhov = gpuArray(Rhov);
 else
     gpu_varargin = {};
+end
+
+if strcmpi(precision,'precision')
+    rho = single(rho); Rhov = single(Rhov);
 end
 
 %%
@@ -350,7 +358,7 @@ if isdebug
 end
 
 % reverse the dual variable to non-scaling form.
-d = rho .* d;
+d = rho .* Rhov .* d;
 x = t(1:N,:);
 r = t(N+1:NL,:);
 
