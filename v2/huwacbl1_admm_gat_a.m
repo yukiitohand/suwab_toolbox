@@ -361,9 +361,9 @@ thRconv_b = 1e+10./Tcond;
 
 switch lower(precision)
     case 'double'
-        th_cond = 1e-13;
+        th_cond = 1e13;
     case 'single'
-        th_cond = 1e-6;
+        th_cond = 1e6;
 end
 
 if isdebug
