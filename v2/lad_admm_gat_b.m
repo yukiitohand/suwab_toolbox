@@ -85,6 +85,7 @@ maxiter = 1000;
 verbose = false;
 % tolerance for the primal and dual residues
 tol = 1e-4;
+lambda_r = ones(L,Ny);
 % spectral penalty parameter
 rho = 0.01 * ones(1,Ny);
 Rhov = ones(NL,1);
@@ -124,6 +125,8 @@ else
                 else
                     error('verbose is invalid');
                 end
+            case 'LAMBDA_R'
+                lambda_r = varargin{i+1};
             case 'RHO'
                 rho = varargin{i+1}; 
             case 'RHOV'
@@ -175,12 +178,13 @@ if gpu
     gpu_varargin = {'gpuArray'};
     A = gpuArray(A); y = gpuArray(y);
     rho = gpuArray(rho); Rhov = gpuArray(Rhov);
+    lambda_r = gpuArray(lambda_r);
 else
     gpu_varargin = {};
 end
 
 if strcmpi(precision,'precision')
-    rho = single(rho); Rhov = single(Rhov);
+    rho = single(rho); Rhov = single(Rhov); lambda_r = single(lambda_r);
 end
 
 %%
@@ -197,6 +201,7 @@ P_ort = I_NL - PinvKt_invKPinvKt*K;
 
 c1 = ones(NL,Ny,precision,gpu_varargin{:});
 c1(1:N,:) = 0;
+c1(N+1:NL,:) = lambda_r .* ones(NL,Ny,precision,gpu_varargin{:});
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;
 

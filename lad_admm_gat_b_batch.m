@@ -191,7 +191,7 @@ k=1;
 res_p = inf;
 res_d = inf;
 onesNy1 = ones(Ny,1,precision,'gpuArray');
-% ones1NL = ones(1,NL,precision,'gpuArray');
+ones1NL = ones(1,NL,precision,'gpuArray');
 ones1NyM = ones(1,Ny,M,precision,'gpuArray');
 onesNL1M = ones(N+L,1,M,precision,'gpuArray');
 
@@ -259,7 +259,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 %         st = s-t; tt0 = t-t0;
         % st2 = st.^2; ss0 = s-s0; tt0 = t-t0;
         % primal feasibility
-        res_pv = sqrt(pagefun(@mtimes,ones1NL2,(s-t).^2));
+        res_pv = sqrt(pagefun(@mtimes,ones1NL,(s-t).^2));
         % dual feasibility
 %         res_dv = rho.*sqrt(Rhov'.^2*tt02);
         res_dv = rho.*sqrt(pagefun(@mtimes,pagefun(@transpose,Rhov.^2),abs((s-s0).*(t-t0))));
@@ -267,7 +267,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         idx = and(res_pv > 10*res_dv, rho<1e5);
         % it looks this upper bound is improtant for stable convergence. it
         % doesn't matter 1e5, 1e3, or 1e10
-        if any(idx)
+        if any(idx,'all')
             rho(idx) = rho(idx)*2;
             ones1NyM(:) = 1;
             ones1NyM(idx) = 0.5;
@@ -276,7 +276,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         idx2 = res_dv > and(10*res_pv, rho>1e-5);
         % it looks this lower bound is improtant for stable convergence. it
         % doesn't matter 1e-5, 1e-3, or 1e-10
-        if any(idx2)
+        if any(idx2,'all')
             rho(idx2) = rho(idx2)/2;
             ones1NyM(:) = 1;
             ones1NyM(idx2) = 2;
@@ -297,7 +297,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % idx3 = res_pv2 > 10*res_dv2;
         % idx4 = res_dv2 > 10*res_pv2;
 
-        if any(idx3) || any(idx4)
+        if any(idx3,'all') || any(idx4,'all')
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
@@ -343,5 +343,5 @@ d = rho .* Rhov .* d;
 x = t(1:N,:,:);
 r = t(N+1:NL,:,:);
 
-cost_val = sum(abs(A*x-y),'all');
+cost_val = []; % sum(abs(A*x-y),'all');
 end

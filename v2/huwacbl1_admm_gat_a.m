@@ -98,6 +98,8 @@ verbose = false;
 tol = 1e-4;
 % sparsity constraint on the library
 lambda_a = 0.0;
+lambda_r = ones(L,Ny);
+lambda_c = zeros(L,Ny);
 % spectral penalty parameter
 rho = 0.01*ones([1,Ny]);
 Rhov = ones(N+L*2,1);
@@ -149,12 +151,12 @@ else
                 end
             case 'LAMBDA_A'
                 lambda_a = varargin{i+1};
-                lambda_a = lambda_a(:);
-                if ~isscalar(lambda_a)
-                    if length(lambda_a)~=N
-                        error('Size of lambda_a is not right');
-                    end
-                end
+                % lambda_a = lambda_a(:);
+                % if ~isscalar(lambda_a)
+                %    if length(lambda_a)~=N
+                %        error('Size of lambda_a is not right');
+                %    end
+                % end
             case 'RHO'
                 rho = varargin{i+1};
                 if length(rho) ~= Ny && length(rho) ~= 1
@@ -211,6 +213,10 @@ else
                 if size(r0,1) ~= L && size(r0,2) ~= Ny
                     error('Size of r0 is not right');
                 end
+            case 'LAMBDA_C'
+                lambda_c = varargin{i+1};
+            case 'LAMBDA_R'
+                lambda_r = varargin{i+1};
             case 'D0'
                 d0 = varargin{i+1};
                 if (size(d0,1) ~= (N+L*2))
@@ -267,12 +273,16 @@ if gpu
     gpu_varargin = {'gpuArray'};
     A = gpuArray(A); y = gpuArray(y); C = gpuArray(C);
     rho = gpuArray(rho); Rhov = gpuArray(Rhov);
+    lambda_r = gpuArray(lambda_r); lambda_a = gpuArray(lambda_a);
+    lambda_c = gpuArray(lambda_c);
 else
     gpu_varargin = {};
 end
 
 if strcmpi(precision,'precision')
     rho = single(rho); Rhov = single(Rhov);
+    lambda_r = single(lambda_r); lambda_a = single(lambda_a);
+    lambda_c = single(lambda_c);
 end
 
 %%
@@ -301,7 +311,8 @@ PT_ort = I_N2L - PinvTt_invTPinvTt*T;
 % projection operator
 c1 = zeros([N+2*L,Ny],precision,gpu_varargin{:});
 c1(1:N,:) = lambda_a.*ones([N,Ny],precision,gpu_varargin{:});
-c1(N+L+1:N+L*2,:) = ones([L,1],precision,gpu_varargin{:})./tau*tau1;
+c1(N+1:N+L,:) = lambda_c.*ones([L,1],precision,gpu_varargin{:});
+c1(N+L+1:N+L*2,:) = lambda_r.*ones([L,1],precision,gpu_varargin{:})./tau*tau1;
 c1rho = c1./rho./Rhov;
 
 c2 = zeros([N+2*L,1],precision,gpu_varargin{:});

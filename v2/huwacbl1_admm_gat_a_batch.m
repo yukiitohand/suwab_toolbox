@@ -185,12 +185,22 @@ tau=single(ynorms);
 tau1 = 0.2;
 T = cat(2,A,C,tau1*repmat(eye(L,precision,'gpuArray'),[1,1,M]));
 
-I_N2L = eye(N+Nc+L,precision,'gpuArray');
+I_NNcL = eye(N+Nc+L,precision,'gpuArray');
 PinvTt = pagefun(@transpose,T)./Rhov;
+
 TPinvTt = pagefun(@mtimes,T,PinvTt);
 PinvTt_invTPinvTt = pagefun(@mrdivide,PinvTt,TPinvTt);
 Tpinvy =  pagefun(@mtimes,PinvTt_invTPinvTt,y);
-PT_ort = I_N2L - pagefun(@mtimes,PinvTt_invTPinvTt,T);
+PT_ort = I_NNcL - pagefun(@mtimes,PinvTt_invTPinvTt,T);
+
+% TPinvTt = zeros(L,L,M,precision,'gpuArray');
+% for mi=1:M, TPinvTt(:,:,mi) = T(:,:,mi)*PinvTt(:,:,mi); end
+% PinvTt_invTPinvTt = pagefun(@mrdivide,PinvTt,TPinvTt);
+% Tpinvy = zeros(N+Nc+L,Ny,M,precision,'gpuArray');
+% for mi=1:M, Tpinvy(:,:,mi) = PinvTt_invTPinvTt(:,:,mi) * y(:,:,mi); end
+% PT_ort = zeros(N+Nc+L,N+Nc+L,M,precision,'gpuArray');
+% for mi=1:M, PT_ort(:,:,mi) = I_NNcL - PinvTt_invTPinvTt(:,:,mi)*T(:,:,mi); end
+
 % projection operator
 c1 = zeros([N+Nc+L,Ny,M],precision,'gpuArray');
 c1(1:N,:,:) = lambda_a.*ones(N,Ny,M,precision,'gpuArray');
@@ -277,6 +287,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 
     % update t
     s = pagefun(@mtimes,PT_ort,(t-d)) + Tpinvy;
+    % for mi=1:M, s(:,:,mi) = PT_ort(:,:,mi)*(t(:,:,mi)-d(:,:,mi)) + Tpinvy(:,:,mi); end
 %     s = 0.5*s+0.5*t; % over relaxation
     % update s
     t = max(soft_thresh(s+d,c1rho),c2);
@@ -300,6 +311,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % st2 = st.^2;
         % primal feasibility
         res_pv = sqrt(pagefun(@mtimes,ones1NNcL,(s-t).^2));
+        % res_pv = sqrt(sum((s-t).^2,2));
         % dual feasibility
         res_dv = rho.*sqrt(pagefun(@mtimes,pagefun(@transpose,Rhov.^2),(t-t0).^2));
         
@@ -343,16 +355,25 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 % actual condition number).
                 Rhov = Rhov_new;
                 PinvTt = pagefun(@transpose,T)./Rhov;
+                
+                % tic;
                 TPinvTt = pagefun(@mtimes,T,PinvTt);
                 PinvTt_invTPinvTt = pagefun(@mrdivide,PinvTt,TPinvTt);
                 Tpinvy =  pagefun(@mtimes,PinvTt_invTPinvTt,y);
-                PT_ort = I_N2L - pagefun(@mtimes,PinvTt_invTPinvTt,T);
-                
+                PT_ort = I_NNcL - pagefun(@mtimes,PinvTt_invTPinvTt,T);
+                % toc;
+                % tic;
+                % for mi=1:M, TPinvTt(:,:,mi) = T(:,:,mi)*PinvTt(:,:,mi); end
+                % PinvTt_invTPinvTt = pagefun(@mrdivide,PinvTt,TPinvTt);
+                % for mi=1:M, Tpinvy(:,:,mi) = PinvTt_invTPinvTt(:,:,mi) * y(:,:,mi); end
+                % for mi=1:M, PT_ort(:,:,mi) = I_NNcL - PinvTt_invTPinvTt(:,:,mi)*T(:,:,mi); end
+                % toc;
                 onesNNcL1M(:) = 1;
                 onesNNcL1M(idx3) = 0.5;
                 onesNNcL1M(idx4) = 2;
                 d = d.*onesNNcL1M;
-                
+                % Tcond.*max(Rhov_new)./min(Rhov_new)
+                % cond(TPinvTt(:,:,1))
                 if isdebug
                     Cnd_Val = ones(1,1,M,precision,'gpuArray');
                     for i=1:M
