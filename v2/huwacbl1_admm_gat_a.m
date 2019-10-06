@@ -463,6 +463,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 % This is because the approximation of the matrix condition
                 % doesn't seem to be accurate enough (much higher than the
                 % actual condition number).
+                fprintf('p');
                 Rhov = Rhov_new;
                 PinvTt = T'./Rhov;
                 TPinvTt = T*PinvTt;
