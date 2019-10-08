@@ -279,7 +279,7 @@ else
     gpu_varargin = {};
 end
 
-if strcmpi(precision,'precision')
+if strcmpi(precision,'single')
     rho = single(rho); Rhov = single(Rhov);
     lambda_r = single(lambda_r); lambda_a = single(lambda_a);
     lambda_c = single(lambda_c);
