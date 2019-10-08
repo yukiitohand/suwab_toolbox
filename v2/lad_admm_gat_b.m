@@ -183,7 +183,7 @@ else
     gpu_varargin = {};
 end
 
-if strcmpi(precision,'precision')
+if strcmpi(precision,'single')
     rho = single(rho); Rhov = single(Rhov); lambda_r = single(lambda_r);
 end
 
@@ -201,7 +201,7 @@ P_ort = I_NL - PinvKt_invKPinvKt*K;
 
 c1 = ones(NL,Ny,precision,gpu_varargin{:});
 c1(1:N,:) = 0;
-c1(N+1:NL,:) = lambda_r .* ones(NL,Ny,precision,gpu_varargin{:});
+c1(N+1:NL,:) = lambda_r .* ones(L,Ny,precision,gpu_varargin{:});
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;
 
