@@ -1,4 +1,4 @@
-function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b_batch( A,y,varargin )
+function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch( A,y,varargin )
 % [ x,b,r,cvx_opts ] = lad_admm_gat_b_batch( A,y,varargin)
 %   perform least absolute deviation using a generalized alternating direction method of
 %   multipliers (ADMM), the formulation 'b'
@@ -99,6 +99,8 @@ lambda_r = ones(L,Ny,M,'gpuArray');
 precision = 'single';
 isdebug = false;
 
+Kcond = [];
+
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
 else
@@ -135,6 +137,8 @@ else
                 lambda_r = varargin{i+1};
             case 'DEBUG'
                 isdebug = varargin{i+1};
+            case 'KCOND'
+                Kcond = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -185,8 +189,8 @@ clear x0 d0 r0
 %%
 % main loop
 % tic
-tol_p = single(sqrt((L)*Ny)*tol);
-tol_d = single(sqrt((L)*Ny)*tol);
+tol_p = sqrt((L+1)*Ny*M)*tol;
+tol_d = sqrt((L+1)*Ny*M)*tol;
 k=1;
 res_p = inf;
 res_d = inf;
@@ -195,10 +199,11 @@ ones1NL = ones(1,NL,precision,'gpuArray');
 ones1NyM = ones(1,Ny,M,precision,'gpuArray');
 onesNL1M = ones(N+L,1,M,precision,'gpuArray');
 
-
-Kcond = ones(1,1,M,precision,'gpuArray');
-for i=1:M
-    Kcond(i) = cond(K(:,:,i)*K(:,:,i)');
+if isempty(Kcond)
+    Kcond = ones(1,1,M,precision); KK = gather(K);
+    for i=1:M
+        Kcond(i) = cond(KK(:,:,i))^2;
+    end
 end
 thRconv_s = 1e-10./Kcond;
 thRconv_b = 1e+10./Kcond;
@@ -308,6 +313,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 % better results
                 % this one 
                 % fprintf('yes');
+                Rhov = Rhov_new;
                 PinvKt = pagefun(@transpose, K)./Rhov;
                 KPinvKt = pagefun(@mtimes, K, PinvKt);
                 PinvKt_invKPinvKt = pagefun(@mrdivide, PinvKt, KPinvKt);
