@@ -1,4 +1,4 @@
-function [x,z,r,d,rho,Rhov,res_p,res_d,cost_val]...
+function [x,z,r,d,rho,Rhov,res_p,res_d,cost_val,Tcond]...
     = huwacbl1_admm_gat_a_batch(A,y,C,varargin)
 % [x,z,res_p,res_d] = uwacbl1_admm_gat_a_batch(A,y,wv,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
@@ -110,6 +110,7 @@ d0 = [];
 
 precision = 'single';
 isdebug = false;
+Tcond = [];
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
@@ -155,6 +156,8 @@ else
                 precision = varargin{i+1};
             case 'DEBUG'
                 isdebug   = varargin{i+1};
+            case 'TCOND'
+                Tcond = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -237,20 +240,29 @@ clear x0 z0 r0
 % main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % tic
-tol_p = single(sqrt((N+Nc+L)*Ny)*tol);
-tol_d = single(sqrt((N+Nc+L)*Ny)*tol);
+tol_p = sqrt((N+Nc+L)*Ny*M)*tol;
+tol_d = sqrt((N+Nc+L)*Ny*M)*tol;
 k=1;
-res_p = single(inf);
-res_d = single(inf);
+res_p = inf;
+res_d = inf;
 onesNy1 = ones(Ny,1,precision,'gpuArray');
 ones1NNcL = ones(1,N+Nc+L,precision,'gpuArray');
 ones1NyM = ones(1,Ny,M,precision,'gpuArray');
 onesNNcL1M = ones(N+Nc+L,1,M,precision,'gpuArray');
 
-Tcond = ones(1,1,M,precision,'gpuArray');
-for i=1:M
-    Tcond(i) = cond(T(:,:,i)*T(:,:,i)');
+% tic;
+% Tcond = ones(1,1,M,precision,'gpuArray');
+% for i=1:M
+%     Tcond(i) = cond(T(:,:,i)*T(:,:,i)');
+% end
+if isempty(Tcond)
+    Tcond = ones(1,1,M,precision); TT = gather(pagefun(@mtimes,T,pagefun(@transpose,T)));
+    for i=1:M
+    Tcond(i) = cond(TT(:,:,i));
+    end
 end
+% toc;
+
 thRconv_s = 1e-10./Tcond;
 thRconv_b = 1e+10./Tcond;
 switch lower(precision)
@@ -306,7 +318,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
-    if (mod(k,10) == 0 || k==1) && k<500
+    if (mod(k,10) == 0 || k==1)
 %         st = s-t; tt0 = t-t0;
         % st2 = st.^2;
         % primal feasibility
