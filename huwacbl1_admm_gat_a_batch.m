@@ -1,57 +1,94 @@
 function [x,z,r,d,rho,Rhov,res_p,res_d,cost_val,Tcond]...
     = huwacbl1_admm_gat_a_batch(A,y,C,varargin)
-% [x,z,res_p,res_d] = uwacbl1_admm_gat_a_batch(A,y,wv,varargin)
+% [x,z,r,d,rho,Rhov,res_p,res_d,cost_val,Tcond]...
+%    = huwacbl1_admm_gat_a_batch(A,y,C,varargin)
 % hyperspectral unmixing with adaptive concave background (HUWACB) via 
 % a generalized alternating direction method of multipliers (ADMM)
 %
-%  Inputs
+%  This function solves the following convex optimization problem 
+%  
+%       minimize    ||lambda_r.*(y-Ax-Cz)||_{1,1} + ||lambda_a .* x||_{1,1}
+%         x,z        + ||lambda_c.*z||_{1,1}
+%         subject to  x>=0 and z>=c2_z
+%
+% Inputs
 %     A : Each of the page is a dictionary matrix (L x Na x S) where Na is
-%         the number of atoms in the
-%         library and L is the number of wavelength bands
-%         If A is empty, then computation is performed only for C
-%     y : observation vector (L x Ny) where N is the number of the
+%         the number of atoms in the library and L is the number of 
+%         wavelength bands
+%     y : observation vector (L x Ny x S) where Ny is the number of the
 %     observations.
-%  Optional parameters
-%     'TOL': tolearance (default) 1e-4
-%     'MAXITER' : maximum number of iterations (default) 1000
-%     'VERBOSE' : {'yes', 'no'}
-%     'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
+%     C : a matrix (L x Nc x S) for background bases
+%
+% Outputs
+%     x: estimated abundances (Na x Ny x S)
+%     z: estimated concave background (L x Ny x S)
+%     r: residual (L x Ny x S)
+%     d: estimated dual variables ((Na+Nc+L) x Ny x S)
+%     rho: spectral penalty parameter "rho" at the convergence, [1 Ny S]
+%     Rhov: spectral penalty parameter "Rhov" at the convergence, [(Na+Nc+L) x 1 x S]
+%     res_p,res_d: primal and dual residuals for feasibility
+%     Tcond: [1 x 1 x S] condition number.
+%
+% OPTIONAL Parameters
+%  ## GENERAL PARAMETERS #-------------------------------------------------
+%   'TOL': scalar,
+%       tolearance (default) 1e-4
+%   'MAXITER': integer, 
+%       maximum number of iterations (default) 1000
+%   'VERBOSE': boolean or {'yes','no'}
+%       whether or not to print information during optimzation.
+%       (default) false
+%
+%  ## COEFFICIENTS #-------------------------------------------------------
+%   'LAMBDA_A': scalar, array, size compatible with [L x Na x S]
+%       sparsity constraint on x, scalar or vector. If it is
 %                 vector, the length must be equal to "N"
 %                 (default) 0
-%     'X0'      : Initial x (coefficient vector/matrix for the libray A)
-%                 (default) 0
-%     'Z0'      : Initial z (coefficient vector/matrix for the concave
-%                 bases C) (default) 0
-%     'C'       : Concave bases C [L x L]. This will be created from 'wv'
-%                 if not provided
-%     'B0'      : Initial Background vector B [L x N]. This will be converted to C
-%                 (default) 0
-%     'R0'      : Initial 'r'
-%                 (default) 0
-%     'D0'      : Initial dual parameters [N+L,L] (non-scaling form)
-%                 (default) 0
-%     'rho'     : initial spectral penalty parameter for different samples,
-%                 scalar or the size of [1,Ny]
-%                 (default) 0.01
-%     'Rhov'    : initial spectral penalty parameter, for different
-%                 dimensions. scalar or the size of [L,1]
-%                 (default) 1
-%  Outputs
-%     x: estimated abundances (N x Ny)
-%     z: estimated concave background (L x Ny)
-%     C: matrix (L x L) for z
-%     r: residual
-%     d: estimated dual variables (N+L x Ny)
-%     rho: spectral penalty parameter "rho" at the convergence, [1 Ny]
-%     Rhov: spectral penalty parameter "Rhov" at the convergence, [L, 1]
-%     res_p,res_d: primal and dual residuals for feasibility
-
-%  HUWACB solves the following convex optimization  problem 
-%  
-%         minimize    ||y-Ax-Cz||^1 + lambda_a .* ||x||_1
-%           x,z
-%         subject to  x>=0 and z(2:L-1,:)>=0
-%  where C is the collection of bases to represent the concave background.
+%   'LAMBDA_R': scalar, array, size compatible with [L x Ny x S]
+%       Weighted coefficients for residual vector.
+%       (default) 1
+%   'LAMBDA_C': scalar, array, size compatible with [L x Nc x S]
+%       sparsity constraints of the backgroudn concave bases.
+%       (default) 0
+%   'C2_Z': scalar, array, size compatible with [Nc x 1]
+%       soft threhsolding vector for the coefficients of the matrix C.
+%       (default) -inf (no constraints)
+%
+%  ## INITIAL VALUES #-----------------------------------------------------
+%   'X0': array, [Na x Ny x S]
+%       initial x (coefficient matrix for the libray A)
+%       (default) []
+%   'Z0': array, [Nc x Ny x S]
+%       initial z (coefficient matrix for C)
+%       (default) []
+%   'R0': array, [L x Ny x S]
+%       initial 'r' (residual matrix)
+%       (default) []
+%   'D0': array, [(Na+Nc+L) x Ny x S]
+%       initial dual variables (non-scaling form)
+%       (default) []
+%   'rho': sclar array, [1 x Ny x S]
+%       initial spectral penalty parameter for different samples,
+%       (default) 0.01
+%   'Rhov': sclar array, [(Na+Nc+L) x 1 x S]
+%       initial spectral penalty parameter, for different dimensions. 
+%       (default) 1
+%
+%  ## PROCESSING OPTIONS #-------------------------------------------------
+%   'PRECISION': string, {'single','double'}
+%       precision for withch the computation is performed.
+%       (default) 'double'
+%   'TCOND': array [1 x 1 x S]
+%       condition number of the matrix to be inverted.
+%       (default) []
+%   'DEBUG': boolean
+%       if true, cost_function and condition of the matrix to be inverted
+%       are plotted. currently not working.
+%       (default) false
+%
+%
+%
+%
 %
 %
 %%
@@ -95,9 +132,11 @@ tol = single(1e-4);
 lambda_a = 0.0;
 lambda_c = 0;
 lambda_r = 1.0;
+c2_z = -inf;
 % spectral penalty parameter
 rho = 0.01*ones(1,Ny,M,'gpuArray');
 Rhov = ones(N+Nc+L,1,M,'gpuArray');
+
 
 % initialization of X0
 x0 = [];
@@ -134,10 +173,11 @@ else
                 end
             case 'LAMBDA_A'
                 lambda_a = varargin{i+1};
-            case 'LAMBDA_C'
-                lambda_c = varargin{i+1};
             case 'LAMBDA_R'
                 lambda_r = varargin{i+1};
+            case 'LAMBDA_C'
+                lambda_c = varargin{i+1};
+            
             case 'RHO'
                 rho = varargin{i+1};
             case 'RHOV'

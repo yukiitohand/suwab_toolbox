@@ -1,29 +1,70 @@
 function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargin )
-% [ x,b,r,cvx_opts ] =lad_admm_gat_b( A,y,varargin)
-%   perform least absolute deviation using a generalized alternating direction method of
-%   multipliers (ADMM), the formulation 'b'
-%     Input Parameters
-%       A  : [L(channels) x N(endmembers)] library matrix
-%       y  : [N(channels) x Ny(pixels)], observation vector.
-% 
-%     Optional Parameters
-%       Maxiter : integer, the maximum number of iteration.
-%                 (default) 1000
-%       Tol     : scalar, tolerance parameter. (default) 1e-4
-%       Verbose : boolean, whether or not print residuals at each iteration
-%                 or not. (default) 0
-%       rho     : scalar or 1 x Ny vector, spectral penalty parameter
-%       x0      : initial x (default) 0
-%       r0      : initial r (default) 0
-%       d0      : initial dual variable (default) 0
-%      * For x0, r0, and d0, initialze those parameters inside the function
-%      if they are set to 0. It is recommended to provide all of them for
-%      efficient warm start.
-% 
-%     Output parameters
-%       x : [N x Ny] estimated abundance matrix
-%       r : [L x Ny] residual vector (y-Ax-b)
+% [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] =lad_admm_gat_b( A,y,varargin)
+%   perform least absolute deviation using a alternating direction method of
+%   multipliers with generalized augmentation terms (ADMM-GAT), the 
+%   formulation 'b'.
 %
+% INPUT Parameters
+%   A  : [L(channels) x N(endmembers)] library matrix
+%   y  : [N(channels) x Ny(pixels)], observation vector.
+%
+% OUTPUT parameters
+%   x : [N x Ny] estimated abundance matrix
+%   r : [L x Ny] residual vector (y-Ax-b)
+%   d : [(N+L) x Ny] dual variables
+%   rho: [1 x Ny] spectral penalty parameters
+%   Rhov: [(N+L) x 1] spectral penalty parameters
+%   res_pv: scalar, primary residual
+%   res_dv: scalar, dual residual
+%   cost_val: scalar, cost value
+%
+% Optional Parameters
+%  ## GENERAL PARAMETERS #-------------------------------------------------
+%   'MAXITER': integer, 
+%       the maximum number of iteration.
+%       (default) 1000
+%   'TOL': scalar, 
+%       tolerance parameter.
+%       (default) 1e-4
+%   'VERBOSE': boolean, 
+%       whether or not print residuals at each iteration or not.
+%       (default) 0
+%
+%  ## COEFFICIENTS #-------------------------------------------------------
+%   'LAMBDA_R': scalar, array, size compatible with [L x Ny]
+%       Weighted coefficients for residual vector.
+%       (default) 1
+%
+%  ## INITIAL VALUES #-----------------------------------------------------
+%   'X0': array, [N x Ny]
+%       initial x 
+%       (default) []
+%   'R0': array, [L x Ny]
+%       initial r (residual matrix)
+%       (default) []
+%   'D0': array, [(L+N) x Ny]
+%       initial dual variables
+%       (default) []
+%   'RHO': scalar, array, [ 1 x Ny ]
+%       spectral penalty parameter.
+%       (default) 0.01
+%   'Rhov': scalar, array, [ (N+L) x 1]
+%       spectral penalty parameter
+%       (default) 1
+%
+%  ## PROCESSING OPTIONS #-------------------------------------------------
+%   'PRECISION': string, {'single','double'}
+%       precision for withch the computation is performed.
+%       (default) 'double'
+%   'GPU': boolean,
+%       whether or not to use GPU for using computation
+%       (default) false
+%   'DEBUG': boolean
+%       if true, cost_function and condition of the matrix to be inverted
+%       are plotted
+%       (default) false
+%       
+% # Note ------------------------------------------------------------------
 %   This function solve the following unconstrained minimization problem
 %   called least absolute deviation
 %
@@ -34,9 +75,9 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %                   minimize || c1.*t ||_1 + I_{Ts=y}(s) 
 %                      x
 %                   subject to s-t = 0
-%   where       _   _                             _   _ 
-%          s = |  x  |,  T = [A I_L], and  c_1 = |  0  |
-%              |_ r _|                           |_ 1 _|
+%   where       _   _                             _          _ 
+%          s = |  x  |,  T = [A I_L], and  c_1 = |     0      |
+%              |_ r _|                           |_ lambda_r _|
 %   and Ax+r=y
 %   The augmented Lagrangian
 %       || c1.*t ||_1 + I_{Ts=y}(s) + rho * d' (s-t) + rho/2 * ||s-t||_2^2
@@ -49,6 +90,7 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %   Oct 04th, 2019  Yuki Itoh: Supports GPU, spectral penalty parameters
 %                              are sufficiently safeguarded. Single
 %                              precition mode is also supported.
+%   Nov 04th, 2019  Yuki Itoh: comments updated.
 
 
 
@@ -131,7 +173,7 @@ else
                 rho = varargin{i+1}; 
             case 'RHOV'
                 Rhov = varargin{i+1};
-           case 'X0'
+            case 'X0'
                 x0 = varargin{i+1};
                 if (size(x0,1) ~= N)
                     error('initial X is inconsistent with A or y');

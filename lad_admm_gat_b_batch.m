@@ -1,28 +1,69 @@
 function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch( A,y,varargin )
-% [ x,b,r,cvx_opts ] = lad_admm_gat_b_batch( A,y,varargin)
-%   perform least absolute deviation using a generalized alternating direction method of
-%   multipliers (ADMM), the formulation 'b'
-%     Input Parameters
-%       A  : [L(channels) x N(endmembers)] library matrix
-%       y  : [N(channels) x Ny(pixels)], observation vector.
+%  [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ]
+%   = lad_admm_gat_b_batch( A,y,varargin )
+%   perform least absolute deviation using a alternating direction method of
+%   multipliers with generalized augmentation terms (ADMM-GAT), the 
+%   formulation 'b'.
+%
+% Input Parameters
+%   A  : [L(channels) x N(endmembers) x S] library matrix
+%   y  : [N(channels) x Ny(pixels) x S], observation vector.
+%
+% Output parameters
+%   x : [N x Ny x S] estimated abundance matrix
+%   r : [L x Ny x S] residual vector (y-Ax-b)
+%   d : [(N+L) x Ny x S] dual variables
+%   rho: [1 x Ny x S] spectral penalty parameters
+%   Rhov: [(N+L) x 1 x S] spectral penalty parameters
+%   res_pv: scalar, primary residual
+%   res_dv: scalar, dual residual
+%   cost_val: scalar, cost value
+%   Kcond: [1 x 1 x S] condition number.
+%
+% Optional Parameters
+%  ## GENERAL PARAMETERS #-------------------------------------------------
+%   'MAXITER': integer, 
+%       the maximum number of iteration.
+%       (default) 1000
+%   'TOL': scalar, 
+%       tolerance parameter.
+%       (default) 1e-4
+%   'VERBOSE': boolean, 
+%       whether or not print residuals at each iteration or not.
+%       (default) 0
+%
+%  ## COEFFICIENTS #-------------------------------------------------------
+%   'LAMBDA_R': scalar, array, size compatible with [L x Ny x S]
+%       Weighted coefficients for residual vector.
+%       (default) 1
+%
+%  ## INITIAL VALUES #-----------------------------------------------------
+%   'X0': array, [N x Ny x S]
+%       initial x 
+%       (default) []
+%   'R0': array, [L x Ny x S]
+%       initial r (residual matrix)
+%       (default) []
+%   'D0': array, [(L+N) x Ny x S]
+%       initial dual variables
+%       (default) []
+%   'RHO': scalar, array, [ 1 x Ny x S ]
+%       spectral penalty parameter.
+%       (default) 0.01
+%   'Rhov': scalar, array, [ (N+L) x 1 x S]
+%       spectral penalty parameter
+%       (default) 1
 % 
-%     Optional Parameters
-%       Maxiter : integer, the maximum number of iteration.
-%                 (default) 1000
-%       Tol     : scalar, tolerance parameter. (default) 1e-4
-%       Verbose : boolean, whether or not print residuals at each iteration
-%                 or not. (default) 0
-%       rho     : scalar or 1 x Ny vector, spectral penalty parameter
-%       x0      : initial x (default) 0
-%       r0      : initial r (default) 0
-%       d0      : initial dual variable (default) 0
-%      * For x0, r0, and d0, initialze those parameters inside the function
-%      if they are set to 0. It is recommended to provide all of them for
-%      efficient warm start.
+%  ## PROCESSING OPTIONS #-------------------------------------------------
+%   'PRECISION': string, {'single','double'}
+%       precision for withch the computation is performed.
+%       (default) 'double'
+%   'DEBUG': boolean
+%       if true, cost_function and condition of the matrix to be inverted
+%       are plotted. probably not working right now.
+%       (default) false
 % 
-%     Output parameters
-%       x : [N x Ny] estimated abundance matrix
-%       r : [L x Ny] residual vector (y-Ax-b)
+% # Note ------------------------------------------------------------------
 %
 %   This function solve the following unconstrained minimization problem
 %   called least absolute deviation
@@ -45,8 +86,7 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch(
 %   for each column.
 %
 %   ==== Update History ===================================================
-%   Mar 18th, 2018  Yuki Itoh: Created
-
+%   Nov  4th, 2019  Yuki Itoh: Started to track changes.
 
 
 %%
