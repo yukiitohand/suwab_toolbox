@@ -334,9 +334,6 @@ c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initialization
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if ~isempty(b0)
-    z0 = C\b0;
-end
 if ~Aisempty
     if isempty(x0) && isempty(z0) && isempty(r0) && isempty(d0)
         s = Tpinvy;
