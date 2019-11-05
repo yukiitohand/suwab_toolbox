@@ -14,30 +14,35 @@ function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_admm_gat_a(A,y,wv,
 %     observations.
 %     wv: wavelength samples (L x 1)
 %  Optional parameters
-%     'TOL': tolearance (default) 1e-4
-%     'MAXITER' : maximum number of iterations (default) 1000
-%     'VERBOSE' : {'yes', 'no'}
-%     'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
-%                 vector, the length must be equal to "N"
-%                 (default) 0
-%     'X0'      : Initial x (coefficient vector/matrix for the libray A)
-%                 (default) 0
-%     'Z0'      : Initial z (coefficient vector/matrix for the concave
-%                 bases C) (default) 0
-%     'C'       : Concave bases C [L x L]. This will be created from 'wv'
-%                 if not provided
-%     'B0'      : Initial Background vector B [L x N]. This will be converted to C
-%                 (default) 0
-%     'R0'      : Initial 'r'
-%                 (default) 0
-%     'D0'      : Initial dual parameters [N+L,L] (non-scaling form)
-%                 (default) 0
-%     'rho'     : initial spectral penalty parameter for different samples,
-%                 scalar or the size of [1,Ny]
-%                 (default) 0.01
-%     'Rhov'    : initial spectral penalty parameter, for different
-%                 dimensions. scalar or the size of [L,1]
-%                 (default) 1
+%   'TOL': tolearance (default) 1e-4
+%   'MAXITER' : maximum number of iterations (default) 1000
+%   'VERBOSE' : {'yes', 'no'}
+%   'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
+%               vector, the length must be equal to "N"
+%               (default) 0
+%   'LAMBDA_R': scalar, array, size compatible with [LxN]
+%       Weighted coefficients for residual vector.
+%       (default) 1
+%   'LAMBDA_C': scalar, array, size compatible with [LxNc]
+%       sparsity constraints of the backgroudn concave bases.
+%       (default) 0
+%               (default) 0
+%   'X0'      : Initial x (coefficient vector/matrix for the libray A)
+%               (default) 0
+%   'Z0'      : Initial z (coefficient vector/matrix for the concave
+%               bases C) (default) 0
+%   'C'       : Concave bases C [L x L]. This will be created from 'wv'
+%               if not provided
+%   'R0'      : Initial 'r'
+%               (default) 0
+%   'D0'      : Initial dual parameters [N+L,L] (non-scaling form)
+%               (default) 0
+%   'rho'     : initial spectral penalty parameter for different samples,
+%               scalar or the size of [1,Ny]
+%               (default) 0.01
+%   'Rhov'    : initial spectral penalty parameter, for different
+%               dimensions. scalar or the size of [L,1]
+%               (default) 1
 %  Outputs
 %     x: estimated abundances (N x Ny)
 %     z: estimated concave background (L x Ny)
@@ -108,14 +113,10 @@ Rhov = ones(N+L*2,1);
 x0 = [];
 % initialization of Z0
 z0 = [];
-% initialization of B
-b0 = [];
 % initialization of r0
 r0 = [];
 % initialization of Lagrange multipliers, d0
 d0 = [];
-% initialization of s0 instead of d0
-s0 = [];
 % base matrix of concave curvature
 C = [];
 
@@ -157,6 +158,10 @@ else
                 %        error('Size of lambda_a is not right');
                 %    end
                 % end
+            case 'LAMBDA_R'
+                lambda_r = varargin{i+1};
+            case 'LAMBDA_C'
+                lambda_c = varargin{i+1};
             case 'RHO'
                 rho = varargin{i+1};
                 if length(rho) ~= Ny && length(rho) ~= 1
@@ -198,25 +203,12 @@ else
                 elseif size(z0,2)~= Ny
                     error('Size of Z0 is not valid');
                 end
-            case 'B0'
-                b0 = varargin{i+1};
-                if (size(b0,1) ~= L)
-                    error('initial Z is inconsistent with A or Y');
-                end
-                if size(b0,2)==1
-                    b0 = repmat(z0,[1,Ny]);
-                elseif size(b0,2)~= Ny
-                    error('Size of Z0 is not valid');
-                end
             case 'R0'
                 r0 = varargin{i+1};
                 if size(r0,1) ~= L && size(r0,2) ~= Ny
                     error('Size of r0 is not right');
                 end
-            case 'LAMBDA_C'
-                lambda_c = varargin{i+1};
-            case 'LAMBDA_R'
-                lambda_r = varargin{i+1};
+            
             case 'D0'
                 d0 = varargin{i+1};
                 if (size(d0,1) ~= (N+L*2))
@@ -227,8 +219,6 @@ else
                 elseif size(d0,2)~= Ny
                     error('Size of D0 is not valid');
                 end
-            case 'S0'
-                s0 = varargin{i+1};
             case 'PRECISION'
                 precision = varargin{i+1};
             case 'DEBUG'
@@ -236,14 +226,9 @@ else
             case 'GPU'
                 gpu = varargin{i+1};
             otherwise
-                % Hmmm, something wrong with the parameter string
-                error(['Unrecognized option: ''' varargin{i} '''']);
+                error('Unrecognized option: %s',varargin{i});
         end
     end
-end
-
-if ~isempty(b0) && ~isempty(z0)
-    error('B0 and Z0 are both defined');
 end
 
 %toc;
@@ -463,7 +448,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
                 % This is because the approximation of the matrix condition
                 % doesn't seem to be accurate enough (much higher than the
                 % actual condition number).
-                fprintf('p');
+                % fprintf('p');
                 Rhov = Rhov_new;
                 PinvTt = T'./Rhov;
                 TPinvTt = T*PinvTt;
