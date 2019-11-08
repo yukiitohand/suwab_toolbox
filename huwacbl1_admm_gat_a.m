@@ -35,6 +35,10 @@ function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_admm_gat_a(A,y,wv,
 %   'VERBOSE': boolean, {'yes','no'}
 %       whether or not to print information during optimzation.
 %       (default) false
+%   'YNormalize': binary, 
+%       whether or not to normalize the columns of y with respect to their 
+%       L1-norms.
+%       (default) true
 %
 %  ## COEFFICIENTS #-------------------------------------------------------
 %   'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
@@ -156,6 +160,9 @@ gpu = false;
 % number.
 isdebug = false;
 
+% y_normalize option
+y_normalize = true;
+
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
 else
@@ -251,6 +258,8 @@ else
                 isdebug = varargin{i+1};
             case 'GPU'
                 gpu = varargin{i+1};
+            case 'YNORMALIZE'
+                y_normalize = varargin{i+1};
             otherwise
                 error('Unrecognized option: %s',varargin{i});
         end
@@ -301,8 +310,16 @@ end
 % pre-processing for main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % rho = 0.01;
-ynorms = vnorms(y,1);
-tau=ynorms;
+% ynorms = vnorms(y,1);
+% tau=ynorms;
+
+if y_normalize
+    ynorms = vnorms(y,1);
+    tau=ynorms;
+else
+    tau = 1;
+end
+
 if strcmpi(precision,'single')
     tau=single(tau);
 end

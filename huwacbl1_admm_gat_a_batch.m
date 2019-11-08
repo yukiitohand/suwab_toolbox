@@ -38,6 +38,10 @@ function [x,z,r,d,rho,Rhov,res_p,res_d,cost_val,Tcond]...
 %   'VERBOSE': boolean or {'yes','no'}
 %       whether or not to print information during optimzation.
 %       (default) false
+%   'YNormalize': binary, 
+%       whether or not to normalize the columns of y with respect to their 
+%       L1-norms.
+%       (default) true
 %
 %  ## COEFFICIENTS #-------------------------------------------------------
 %   'LAMBDA_A': scalar, array, size compatible with [L x Na x S]
@@ -117,6 +121,8 @@ function [x,z,r,d,rho,Rhov,res_p,res_d,cost_val,Tcond]...
 [~,N,~] = size(A);
 [~,Nc,~] = size(C);
 
+Aisempty = N==0;
+
 %%
 %tic;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -150,6 +156,9 @@ d0 = [];
 precision = 'single';
 isdebug = false;
 Tcond = [];
+
+% y_normalize option
+y_normalize = true;
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs');
@@ -198,6 +207,8 @@ else
                 isdebug   = varargin{i+1};
             case 'TCOND'
                 Tcond = varargin{i+1};
+            case 'YNORMALIZE'
+                y_normalize = varargin{i+1};
             otherwise
                 % Hmmm, something wrong with the parameter string
                 error(['Unrecognized option: ''' varargin{i} '''']);
@@ -222,8 +233,17 @@ end
 % pre-processing for main loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % rho = 0.01;
-ynorms = vnorms(y,1);
-tau=single(ynorms);
+% ynorms = vnorms(y,1);
+if y_normalize
+    ynorms = vnorms(y,1);
+    tau=ynorms;
+else
+    tau = 1;
+end
+
+if strcmpi(precision,'single')
+    tau=single(tau);
+end
 
 tau1 = 0.2;
 T = cat(2,A,C,tau1*repmat(eye(L,precision,'gpuArray'),[1,1,M]));
@@ -444,8 +464,8 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 end
 
 x = t(1:N,:,:);
-z = t(N+1:N+L,:,:);
-r = t(N+L+1:N+L*2,:,:)*tau1;
+z = t(N+1:N+Nc,:,:);
+r = t(N+Nc+1:N+Nc+L,:,:)*tau1;
 d=rho.*Rhov.*d;
 
 cost_val = [];% sum(abs(y-A*x-C*z)./tau,'all')+sum(abs(lambda_a.*x),'all');
