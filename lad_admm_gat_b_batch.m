@@ -36,6 +36,9 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch(
 %   'LAMBDA_R': scalar, array, size compatible with [L x Ny x S]
 %       Weighted coefficients for residual vector.
 %       (default) 1
+%   'LAMBDA_A': sparsity constraint on x, scalar or vector. size should be
+%               compatible with [N x Ny x S]
+%               (default) 0
 %
 %  ## INITIAL VALUES #-----------------------------------------------------
 %   'X0': array, [N x Ny x S]
@@ -68,16 +71,16 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch(
 %   This function solve the following unconstrained minimization problem
 %   called least absolute deviation
 %
-%                   minimize || y-Ax ||_1
+%                   minimize || y-Ax ||_1 + || lambda_a .* x ||_1
 %                      x
 %
 %   In the formulation this problem is converted to
 %                   minimize || c1.*t ||_1 + I_{Ts=y}(s) 
 %                      x
 %                   subject to s-t = 0
-%   where       _   _                             _   _ 
-%          s = |  x  |,  T = [A I_L], and  c_1 = |  0  |
-%              |_ r _|                           |_ 1 _|
+%   where       _   _                             _          _ 
+%          s = |  x  |,  T = [A I_L], and  c_1 = |  lambda_a  |
+%              |_ r _|                           |_ lambda_r _|
 %   and Ax+r=y
 %   The augmented Lagrangian
 %       || c1.*t ||_1 + I_{Ts=y}(s) + rho * d' (s-t) + rho/2 * ||s-t||_2^2
@@ -87,6 +90,7 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch(
 %
 %   ==== Update History ===================================================
 %   Nov  4th, 2019  Yuki Itoh: Started to track changes.
+%   Dec 17th, 2019  Yuki Itoh: lambda_a added.
 
 
 %%
@@ -134,6 +138,7 @@ x0 = [];
 r0 = [];
 d0 = [];
 
+lambda_a = zeros(N,Ny,M,'gpuArray');
 lambda_r = ones(L,Ny,M,'gpuArray');
 
 precision = 'single';
@@ -175,13 +180,14 @@ else
                 precision = varargin{i+1};
             case 'LAMBDA_R'
                 lambda_r = varargin{i+1};
+            case 'LAMBDA_A'
+                lambda_a = varargin{i+1};
             case 'DEBUG'
                 isdebug = varargin{i+1};
             case 'KCOND'
                 Kcond = varargin{i+1};
             otherwise
-                % Hmmm, something wrong with the parameter string
-                error(['Unrecognized option: ''' varargin{i} '''']);
+                error('Unrecognized option: %s', varargin{i});
         end
     end
 end
@@ -203,7 +209,7 @@ I_NL = eye(NL,precision,'gpuArray');
 P_ort = I_NL - pagefun(@mtimes, PinvKt_invKPinvKt, K);
 
 c1 = ones(NL,Ny,M,precision,'gpuArray');
-c1(1:N,:,:) = 0;
+c1(1:N,:,:) = lambda_a.*ones(N,Ny,M,'gpuArray');
 c1(N+1:N+L,:,:) = lambda_r.*ones(L,Ny,M,'gpuArray')*tau1;
 c1rho = c1 ./ rho ./ Rhov;
 

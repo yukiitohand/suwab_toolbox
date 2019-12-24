@@ -34,6 +34,9 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %   'LAMBDA_R': scalar, array, size compatible with [L x Ny]
 %       Weighted coefficients for residual vector.
 %       (default) 1
+%   'LAMBDA_A': sparsity constraint on x, scalar or vector. size should be
+%               compatible with [N x Ny]
+%               (default) 0
 %
 %  ## INITIAL VALUES #-----------------------------------------------------
 %   'X0': array, [N x Ny]
@@ -68,7 +71,7 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %   This function solve the following unconstrained minimization problem
 %   called least absolute deviation
 %
-%                   minimize || y-Ax ||_1
+%                   minimize || y-Ax ||_1 + || lambda_a .* x ||_1
 %                      x
 %
 %   In the formulation this problem is converted to
@@ -76,7 +79,7 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %                      x
 %                   subject to s-t = 0
 %   where       _   _                             _          _ 
-%          s = |  x  |,  T = [A I_L], and  c_1 = |     0      |
+%          s = |  x  |,  T = [A I_L], and  c_1 = |  lambda_a  |
 %              |_ r _|                           |_ lambda_r _|
 %   and Ax+r=y
 %   The augmented Lagrangian
@@ -91,6 +94,7 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val ] = lad_admm_gat_b( A,y,varargi
 %                              are sufficiently safeguarded. Single
 %                              precition mode is also supported.
 %   Nov 04th, 2019  Yuki Itoh: comments updated.
+%   Dec 17th, 2019  Yuki Itoh: lambda_a added.
 
 
 
@@ -128,6 +132,7 @@ verbose = false;
 % tolerance for the primal and dual residues
 tol = 1e-4;
 lambda_r = ones(L,Ny);
+lambda_a = 0.0;
 % spectral penalty parameter
 rho = 0.01 * ones(1,Ny);
 Rhov = ones(NL,1);
@@ -169,6 +174,8 @@ else
                 end
             case 'LAMBDA_R'
                 lambda_r = varargin{i+1};
+            case 'LAMBDA_A'
+                lambda_a = varargin{i+1};
             case 'RHO'
                 rho = varargin{i+1}; 
             case 'RHOV'
@@ -210,8 +217,7 @@ else
             case 'GPU'
                 gpu = varargin{i+1};
             otherwise
-                % Hmmm, something wrong with the parameter string
-                error(['Unrecognized option: ''' varargin{i} '''']);
+                error('Unrecognized option: %s', varargin{i});
         end
     end
 end
@@ -242,7 +248,7 @@ I_NL = eye(NL,precision,gpu_varargin{:});
 P_ort = I_NL - PinvKt_invKPinvKt*K;
 
 c1 = ones(NL,Ny,precision,gpu_varargin{:});
-c1(1:N,:) = 0;
+c1(1:N,:) = lambda_a .* ones([N,Ny],precision,gpu_varargin{:});
 c1(N+1:NL,:) = lambda_r .* ones(L,Ny,precision,gpu_varargin{:});
 c1 = c1*tau1;
 c1rho = c1 ./ rho ./ Rhov;

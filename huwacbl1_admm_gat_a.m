@@ -41,8 +41,8 @@ function [x,z,C,r,d,rho,Rhov,res_p,res_d,cost_val] = huwacbl1_admm_gat_a(A,y,wv,
 %       (default) true
 %
 %  ## COEFFICIENTS #-------------------------------------------------------
-%   'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
-%               vector, the length must be equal to "N"
+%   'LAMBDA_A': sparsity constraint on x, scalar or vector. size should be
+%               compatible with [N x Ny]
 %               (default) 0
 %   'LAMBDA_R': scalar, array, size compatible with [LxNy]
 %       Weighted coefficients for residual vector.

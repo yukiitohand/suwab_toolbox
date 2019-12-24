@@ -45,9 +45,8 @@ function [x,z,r,d,rho,Rhov,res_p,res_d,cost_val,Tcond]...
 %
 %  ## COEFFICIENTS #-------------------------------------------------------
 %   'LAMBDA_A': scalar, array, size compatible with [L x Na x S]
-%       sparsity constraint on x, scalar or vector. If it is
-%                 vector, the length must be equal to "N"
-%                 (default) 0
+%       sparsity constraint on x, scalar or vector. 
+%       (default) 0
 %   'LAMBDA_R': scalar, array, size compatible with [L x Ny x S]
 %       Weighted coefficients for residual vector.
 %       (default) 1
@@ -210,8 +209,7 @@ else
             case 'YNORMALIZE'
                 y_normalize = varargin{i+1};
             otherwise
-                % Hmmm, something wrong with the parameter string
-                error(['Unrecognized option: ''' varargin{i} '''']);
+                error('Unrecognized option: %s', varargin{i});
         end
     end
 end
