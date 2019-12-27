@@ -227,12 +227,14 @@ if gpu
     A = gpuArray(A); y = gpuArray(y);
     rho = gpuArray(rho); Rhov = gpuArray(Rhov);
     lambda_r = gpuArray(lambda_r);
+    lambda_a = gpuArray(lambda_a);
 else
     gpu_varargin = {};
 end
 
 if strcmpi(precision,'single')
     rho = single(rho); Rhov = single(Rhov); lambda_r = single(lambda_r);
+    lambda_a = single(lambda_a);
 end
 
 %%
