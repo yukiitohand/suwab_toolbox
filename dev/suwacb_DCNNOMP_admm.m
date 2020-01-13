@@ -96,7 +96,7 @@ for n=1:numblocks %numblocks
     
     if root
         % [ XCtmp,r_mintmp ] = ConcaveFit(x,Yn);
-        [~,XCtmp,Ctmp] =  huwacb_admm2_stflip([],Yn,x);
+        [~,XCtmp,Ctmp] =  huwacb_admm2_stflip([],Yn,x,'tol',1e-6,'maxiter',1000);
         r_mintmp = vnorms(Yn - Ctmp*XCtmp,1,2);
         notConvergeFlagtmp = r_mintmp>tol;
         varargin{rootval_idx} = false;
@@ -119,6 +119,7 @@ for n=1:numblocks %numblocks
             RAKbar = A(:,K_bar) - A(:,K)*XAAKbar - Ctmp*XCAKbar;
         end
         RAKbarNrmed = normalizevec(RAKbar,1,'normtype',2);
+        % RAKbarNrmed = normalizevec(A(:,K_bar),1,'normtype',2);
         V = RAKbarNrmed' * R;
         [r_mintmp,i_mintmp] = max(V,[],1);
         idxesA = K_bar(i_mintmp);

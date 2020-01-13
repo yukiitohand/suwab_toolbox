@@ -1,4 +1,4 @@
-function [ XA,XC,res ] = suwacb_admm( x,A,Y,varargin )
+function [ XA,XC,res,Ctmp ] = suwacb_admm( x,A,Y,varargin )
 % [ XA,XC ] = suwacb( x,A,Y,varargin )
 %   sparse unmixing with adaptive concave background
 %   Input variables

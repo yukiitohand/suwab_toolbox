@@ -373,7 +373,13 @@ if ~Aisempty
         error('not implemented yet. Initialization works with all or nothing.');
     end
 else
-    error('not implemented yet');
+    if isempty(x0) && isempty(z0) && isempty(r0) && isempty(d0)
+        s = Tpinvy;
+        t = max(soft_thresh(s,c1rho),c2);
+        d = s-t;
+    else
+        error('not implemented yet');
+    end
 end
 
 clear x0 z0 r0 d0
@@ -529,6 +535,10 @@ if gpu
     [x,z,C,r,d,rho,Rhov] = gather(x,z,C,r,d,rho,Rhov);
 end
 
-cost_val = sum(abs(y-A*x-C*z)./tau,'all')+sum(abs(lambda_a.*x),'all');
+if Aisempty
+    cost_val = sum(abs(y-C*z)./tau,'all');
+else
+    cost_val = sum(abs(y-A*x-C*z)./tau,'all')+sum(abs(lambda_a.*x),'all');
+end
 
 end

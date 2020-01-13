@@ -1,6 +1,6 @@
 function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch_v2( A,y,varargin )
 %  [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ]
-%   = lad_admm_gat_b_batch( A,y,varargin )
+%   = lad_admm_gat_b_batch_v2( A,y,varargin )
 %   perform least absolute deviation using a alternating direction method of
 %   multipliers with generalized augmentation terms (ADMM-GAT), the 
 %   formulation 'b'.
@@ -91,6 +91,10 @@ function [ x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond ] = lad_admm_gat_b_batch_
 %   ==== Update History ===================================================
 %   Nov  4th, 2019  Yuki Itoh: Started to track changes.
 %   Dec 17th, 2019  Yuki Itoh: lambda_a added.
+%   Dec 26th, 2019  Yuki Itoh: v2 is implemented based on
+%                              lad_admm_ga_b_batch.m. This function now
+%                              supports CPU version. Several options are
+%                              added.
 
 
 %%
@@ -262,15 +266,24 @@ if isempty(x0) && isempty(d0)
     d = s-t;
 elseif ~isempty(x0) && ~isempty(d0) && isempty(r0)
     if gpu
-        r0 = pagefun(@mtimes,A,x0)-y;
+        r0 = y-pagefun(@mtimes,A,x0);
     else
-        r0 = mmx_mkl_multi('mult',A,x0)-y;
+        r0 = y-mmx_mkl_multi('mult',A,x0);
     end
     t = cat(1,x0,r0);
     d = d0 ./ rho ./ Rhov;
 elseif ~isempty(x0) && ~isempty(d0) && ~isempty(r0)
     t = cat(1,x0,r0);
     d = d0 ./ rho ./ Rhov;
+elseif ~isempty(x0) && isempty(d0) && isempty(r0)
+    if gpu
+        r0 = y-pagefun(@mtimes,A,x0);
+    else
+        r0 = y-mmx_mkl_multi('mult',A,x0);
+    end
+    s = cat(1,x0,r0);
+    t = soft_thresh(s ,c1rho);
+    d = s-t;
 end
 
 clear x0 d0 r0
@@ -464,12 +477,12 @@ x = t(1:N,:,:);
 r = t(N+1:NL,:,:);
 
 if gpu
-    cost_val = sum(abs(pagefun(@mtimes,A,x)-y)+abs(lambda_a.*x),'all');
+    cost_val = sum(abs(pagefun(@mtimes,A,x)-y),'all')+sum(abs(lambda_a.*x),'all');
 else
-    cost_val = sum(abs(mmx_mkl_multi('multi',A,x)-y)+abs(lambda_a.*x),'all');
+    cost_val = sum(abs(mmx_mkl_multi('multi',A,x)-y),'all')+sum(abs(lambda_a.*x),'all');
 end
 
-if gpu && gpu_out
+if gpu && ~gpu_out
     [x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond] = gather(x,r,d,rho,Rhov,res_pv,res_dv,cost_val,Kcond);
 end
 

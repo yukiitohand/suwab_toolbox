@@ -222,12 +222,17 @@ if isempty(x0) && isempty(d0)
     t = soft_thresh(s ,c1rho);
     d = s-t;
 elseif ~isempty(x0) && ~isempty(d0) && isempty(r0)
-    r0 = pagefun(@mtimes,A,x0)-y;
+    r0 = y-pagefun(@mtimes,A,x0);
     t = cat(1,x0,r0);
     d = d0 ./ rho ./ Rhov;
 elseif ~isempty(x0) && ~isempty(d0) && ~isempty(r0)
     t = cat(1,x0,r0);
     d = d0 ./ rho ./ Rhov;
+elseif ~isempty(x0) && isempty(d0) && isempty(r0)
+    r0 = y-pagefun(@mtimes,A,x0);
+    s = cat(1,x0,r0);
+    t = soft_thresh(s ,c1rho);
+    d = s-t;
 end
 
 clear x0 d0 r0

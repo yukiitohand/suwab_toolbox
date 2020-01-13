@@ -136,6 +136,7 @@ lambda_a = 0.0;
 % spectral penalty parameter
 rho = 0.01 * ones(1,Ny);
 Rhov = ones(NL,1);
+Rhov_update = true;
 % intial value
 x0 = [];
 r0 = [];
@@ -216,6 +217,8 @@ else
                 isdebug = varargin{i+1};
             case 'GPU'
                 gpu = varargin{i+1};
+            case 'RHOV_UPDATE'
+                Rhov_update = varargin{i+1};
             otherwise
                 error('Unrecognized option: %s', varargin{i});
         end
@@ -276,6 +279,14 @@ elseif ~isempty(x0) && ~isempty(d0) && ~isempty(r0)
     end
     t = [x0;r0];
     d = d0 ./ rho ./Rhov;
+elseif ~isempty(x0) && isempty(d0) && isempty(r0)
+    if gpu
+        x0 = gpuArray(x0);
+    end
+    r0 = y-A*x0;
+    s = [x0;r0];
+    t = soft_thresh(s ,c1rho);
+    d = s-t;
 end
 
 clear x0 d0 r0
@@ -365,42 +376,43 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
             d(:,idx2) = d(:,idx2)*2;
         end
         c1rho = c1./rho;
-        
-        % Rho for different dimension
-        % primal feasibility
-        res_pv2 = sqrt(st2*onesNy1);
-        % dual feasibility
-        res_dv2 = Rhov .* sqrt(abs(ss0.*tt0)*rho'.^2);
-        idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b);
-        % Rhov(idx3) = Rhov(idx3)*2;
-        % d(idx3,:) = d(idx3,:)/2;
-        idx4 = and(res_dv2 > 10*res_pv2,Rhov>thRconv_s);
-        % Rhov(idx4) = Rhov(idx4)/2;
-        % d(idx4,:) = d(idx4,:)*2;
-        if any(idx3) || any(idx4)
-            Rhov_new = Rhov;
-            Rhov_new(idx3) = Rhov_new(idx3)*2;
-            Rhov_new(idx4) = Rhov_new(idx4)/2;
-            if Kcond*max(Rhov_new)/min(Rhov_new) < th_cond
-                % first I upper bounded with 1e13, realize 1e-8 shows
-                % better results
-                % this one 
-                % fprintf('yes');
-                Rhov = Rhov_new;
-                PinvKt = K'./Rhov;
-                KPinvKt = K*PinvKt;
-                PinvKt_invKPinvKt = PinvKt / KPinvKt;
-                PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
-                P_ort = I_NL - PinvKt_invKPinvKt*K;
-                
-                d(idx3,:) = d(idx3,:)/2;
-                d(idx4,:) = d(idx4,:)*2;
-                if isdebug
-                    Cnd_Val = cond(KPinvKt,2);
-                    Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
-                end
-            end  
-        end            
+        if Rhov_update
+            % Rho for different dimension
+            % primal feasibility
+            res_pv2 = sqrt(st2*onesNy1);
+            % dual feasibility
+            res_dv2 = Rhov .* sqrt(abs(ss0.*tt0)*rho'.^2);
+            idx3 = and(res_pv2 > 10*res_dv2, Rhov<thRconv_b);
+            % Rhov(idx3) = Rhov(idx3)*2;
+            % d(idx3,:) = d(idx3,:)/2;
+            idx4 = and(res_dv2 > 10*res_pv2,Rhov>thRconv_s);
+            % Rhov(idx4) = Rhov(idx4)/2;
+            % d(idx4,:) = d(idx4,:)*2;
+            if any(idx3) || any(idx4)
+                Rhov_new = Rhov;
+                Rhov_new(idx3) = Rhov_new(idx3)*2;
+                Rhov_new(idx4) = Rhov_new(idx4)/2;
+                if Kcond*max(Rhov_new)/min(Rhov_new) < th_cond
+                    % first I upper bounded with 1e13, realize 1e-8 shows
+                    % better results
+                    % this one 
+                    % fprintf('yes');
+                    Rhov = Rhov_new;
+                    PinvKt = K'./Rhov;
+                    KPinvKt = K*PinvKt;
+                    PinvKt_invKPinvKt = PinvKt / KPinvKt;
+                    PinvKt_invKPinvKt_y = PinvKt_invKPinvKt * y;
+                    P_ort = I_NL - PinvKt_invKPinvKt*K;
+
+                    d(idx3,:) = d(idx3,:)/2;
+                    d(idx4,:) = d(idx4,:)*2;
+                    if isdebug
+                        Cnd_Val = cond(KPinvKt,2);
+                        Cnd_Val_apro = Kcond*max(Rhov)/min(Rhov);
+                    end
+                end  
+            end
+        end
         c1rho = c1rho./Rhov;
 %         res_p2 = norm(res_pv); res_d2 = norm(res_dv);
     end
