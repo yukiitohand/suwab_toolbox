@@ -324,7 +324,7 @@ if strcmpi(precision,'single')
     tau=single(tau);
 end
 
-tau1 = 0.2;
+tau1 = 0.2; % tau1 = 0.2;
 if Aisempty
     T = [C tau1*eye(L,precision,gpu_varargin{:})];
 else
@@ -518,8 +518,8 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
 end
 
 if isdebug
-    figure; plot(cost_vals);
-    yyaxis right; plot(params); hold on; plot(params_2);
+    figure; semilogy(cost_vals);
+    yyaxis right; semilogy(params,'DisplayName','cnd'); hold on; semilogy(params_2,'DisplayName','cnd');
 end
 
 if Aisempty
