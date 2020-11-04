@@ -20,6 +20,8 @@ function [x,z,C,d,rho,res_p,res_d] = huwacb_admm2_stflip(A,y,wv,varargin)
 %     'VERBOSE' : {'yes', 'no'}
 %     'LAMBDA_A': sparsity constraint on x, scalar or vector. If it is
 %                 vector, the length must be equal to "N"
+%     'LAMBDA2_C': l2 norm regularizer constraint on z, scalar or vector. If it is
+%                 vector, the length must be equal to "L"
 %                 (default) 0
 %     'X0'      : Initial x (coefficient vector/matrix for the libray A)
 %                 (default) 0
@@ -95,6 +97,9 @@ tol = 1e-4;
 weight = ones([L,1]);
 % sparsity constraint on the library
 lambda_a = 0.0;
+
+% trade-off parameter for the concave component of the l2-norm regularizer
+lambda2_c = 0.0;
 % spectral penalty parameter
 rho = 0.01;
 
@@ -146,6 +151,9 @@ else
                         error('Size of lambda_a is not right');
                     end
                 end
+                
+            case 'LAMBDA2_C'
+                lambda2_c = varargin{i+1};
             case 'RHO'
                 rho = varargin{i+1};
 %             case 'NONNEG'
@@ -205,8 +213,7 @@ else
                     error('Size of D0 is not valid');
                 end
             otherwise
-                % Hmmm, something wrong with the parameter string
-                error(['Unrecognized option: ''' varargin{i} '''']);
+                error('Unrecognized option: %s',varargin{i});
         end
     end
 end
@@ -221,13 +228,6 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create the bases for continuum.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%C = continuumDictionary(L);
-% C = concaveOperator(wv);
-% Cinv = C\eye(L);
-% s_c = vnorms(Cinv,1);
-% Cinv = bsxfun(@rdivide,Cinv,s_c);
-% C = bsxfun(@times,C,s_c');
-% C = Cinv;
 if C==0
     C = continuumDictionary(wv);
     s_c = vnorms(C,1);
@@ -244,15 +244,22 @@ if Aisempty
 else
     T = [A C];
 end
-% weight = weight(:);
-% T = bsxfun(@times,weight,T);
-% [V,Sigma] = svd(T'*T);
-[U,Sigma1,V] = svd(T);
-Sigma = zeros([NL,1]);
-Sigma(1:L) = diag(Sigma1).^2;
-Sigmarhoinv = 1./(Sigma + rho);
-Q = bsxfun(@times,V,Sigmarhoinv') * V.';
-% y = bsxfun(@times,weight,y);
+
+lambda2 = zeros(1,NL);
+lambda2(N+1:NL) = lambda2_c;
+
+% Td = T'*T + diag(lambda2);
+% [U,Sigma1,V] = svd(Td);
+% Sigma = diag(Sigma1);
+% Sigmarhoinv = 1./(Sigma + rho);
+% Q = V * (Sigmarhoinv .* V.');
+I_NL = eye(NL,NL);
+
+TtT = T'*T;
+Q = (TtT + diag(rho+lambda2)) \ I_NL;
+
+
+
 ayy = T' * y;
 
 lambda_a_v = lambda_a.*ones([N,1]);
@@ -270,59 +277,13 @@ if b0~=0
     z0 = C\b0;
 end
 
-% if ~Aisempty
-%     if x0 == 0
-%         s= Q*ayy;
-%         x = s(1:N,:);
-%         x(x<0) = 0;
-%     else
-%         x=x0;
-%     end
-% end
-
-
-if x0==0
-%     s = zeros(NL,Ny);
-%     if Aisempty
-        
-        s = Q*ayy;
-        s = max(s,kappa2);
-%     else
-        
-%         rho = rho0;
-% %         d = d0*rho;
-%         x0 = zeros(N,Ny);
-%         d0 = [d0(1:12,:);x0;d0(13:end,:)];
-%         x0(1:12,:) = x;
-        
-%         s = [x;z];
-%     end
-else
-%     s = [x0;z0];
+if x0==0 
+    s = Q*ayy;
+    s = max(s,kappa2);
 end
 
-
-% if b0==0
-% %     if z0 == 0
-% %         z = zeros([L,Ny]);
-% %     else
-% %         z=z0;
-% %     end
-% else
-%     z0 = C\b0;
-% end
-
-% if ~Aisempty
-%     s = [x;z];
-% else
-%     s = z;
-% end
-
-% augmented variables
-% t = s;
 % dual variables
 if d0==0
-%     d = zeros([N+L,Ny]);
     t = max(s-kappa,kappa2);
     d = s-t;
 else
@@ -344,42 +305,21 @@ k=1;
 res_p = inf;
 res_d = inf;
 change_rho = 0;
-% idx = [1:N, N+2:N+L-1];
 update_rho_active = 1;
 
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     % save z to be used later
-%     if mod(k,2) == 0 || k==1
-        s0 = s;
-%     end
-      
-%     fprintf('k=%d\n',k);
-
-    % update t
+    s0 = s;
     
-%     t = s+d;
-%     t(idx,:) = max(t(idx,:),0);
-%     t(1:N,:) = soft_thresh(t(1:N,:),lambda_a_v);
-%     t = max(soft_thresh(s+d,kappa),kappa2);
+    % update t
     t = max(s+d-kappa,kappa2);
-%     t = 0.6*t +0.4*s; % under-relaxation
     
     % update s
     s = Q * (ayy + rho * (t-d));
     
     % update the dual variables
     d = d + s-t;
-    
-%     if mod(k,2) == 0 || k==1
-        % primal feasibility
-%         res_p = norm(s-t,'fro');
-%         % dual feasibility
-%         res_d = rho*(norm((s-s0),'fro'));
-%         if  verbose
-%             fprintf(' k = %f, res_p = %f, res_d = %f\n',k,res_p,res_d)
-%         end
-%     end
     
     % update mu so to keep primal and dual feasibility whithin a factor of 10
     if mod(k,10) == 0
@@ -403,11 +343,11 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
             end
             if  change_rho
                 % Px and Pb
-                Sigmarhoinv = 1./(Sigma + rho);
-                Q = bsxfun(@times,V,Sigmarhoinv') * V.';
+                % Sigmarhoinv = 1./(Sigma + rho);
+                % Q = V * (Sigmarhoinv .* V.');
+                Q = (TtT + diag(rho+lambda2)) \ I_NL;
                 kappa(1:N) = lambda_a_v ./ rho;
                 change_rho = 0;
-%                 fprintf('k=%d,rho=%d\n',k,rho);
             end
         end
     end
