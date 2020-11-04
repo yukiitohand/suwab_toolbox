@@ -23,6 +23,7 @@ function [ XA,XC,res,Ctmp ] = suwacb_admm( x,A,Y,varargin )
 tol = 0.044;
 maxnum = 4;
 idx_sel_init = [];
+lambda2_c = 0;
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs.');
@@ -31,6 +32,8 @@ else
         switch upper(varargin{i})
             case 'PRESELECTED_IDX'
                 idx_sel_init = varargin{i+1};
+            case 'LAMBDA2_C'
+                lambda2_c = varargin{i+1};
             case 'TOL'
                 tol = varargin{i+1};
                 if (tol<=0)
@@ -38,9 +41,9 @@ else
                 end
             case 'MAXNUM'
                 maxnum = varargin{i+1};
-                if (maxnum<=0)
-                       error('MAXNUM must be positive.');
-                end
+                % if (maxnum<=0)
+                %        error('MAXNUM must be positive.');
+                % end
             otherwise
                 error('Unrecognized option: %s',varargin{i});
         end
@@ -76,7 +79,8 @@ for n=1:N %numblocks
     
     % Perform a constrained non-negative least squares with pre-selected
     % endmembers
-    [xA_min,xC_min,Ctmp] =  huwacb_admm2_stflip(Atmp,y,x);
+    [xA_min,xC_min,Ctmp] =  huwacb_admm2_stflip(Atmp,y,x,...
+        'lambda2_c',lambda2_c,'tol',1e-5','maxiter',1000,'verbose','no');
     
     % Obtain residual
     if isempty(xA_min)
@@ -105,7 +109,8 @@ for n=1:N %numblocks
             
             % Perform a constrained non-negative least squares with the
             % incremented endmember.
-            [xA,xC,Ctmp] =  huwacb_admm2_stflip(Atmp,y,x);
+            [xA,xC,Ctmp] =  huwacb_admm2_stflip(Atmp,y,x,...
+                'lambda2_c',lambda2_c,'tol',1e-5','maxiter',1000);
             
             % Obtain residual
             r = vnorms(y - Atmp*xA - Ctmp*xC,1,2);
