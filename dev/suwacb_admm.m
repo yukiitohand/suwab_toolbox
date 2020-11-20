@@ -11,10 +11,25 @@ function [ XA,XC,res,Ctmp ] = suwacb_admm( x,A,Y,varargin )
 %       'MAXNUM': scalar, maximal number of endmembers, (default) 4
 %       'PRESELECTED_IDX': logical or numerical array
 %            indicies for the preselected endmembers, (default) []
+%       'PRESELECT_MODE': char/string {"BATCH0","N-SEQUENTIAL"}
+%            mode for how to deploy pre-selected endmembers
+%            (default) "Normal"
+%            "Normal": no preselection.
+%            "BATCH0"
+%              The pre-selected endmembers are integrated into the library
+%              at the iteration 0 and later, considered to be a part of
+%              background.
+%            "N-SEQUENTIAL"
+%              First NPRE iterations are performed only with the pre-selected
+%              endmembers.
+%       'NPRE': scalar,
+%          Only used with "N-SEQUENTIAL" mode. Define the number of
+%          iterations with the pre-selected endmembers. If Npre > MAXNUM,
+%          then the iteration stops at MAXNUM.
+%          (default) 0
+%
 %   [future implementation]
-%       'BLOCKSIZE': scaler, number of vectors that are thrown to cvx 
-%                    solverat one time
-%                    (default) 500
+%       'BLOCKSIZE': scaler, 
 %   Output variables
 %       XA: (p x N)-array, estimated abundance matrix
 %       XC: (d x N)-array, estimated concave curve matrix
@@ -24,12 +39,18 @@ tol = 0.044;
 maxnum = 4;
 idx_sel_init = [];
 lambda2_c = 0;
+mode_preselect = 'Normal';
+Npre = 0;
 
 if (rem(length(varargin),2)==1)
     error('Optional parameters should always go by pairs.');
 else
     for i=1:2:(length(varargin)-1)
         switch upper(varargin{i})
+            case 'PRESELECT_MODE'
+                mode_preselect = varargin{i+1};
+            case 'NPRE'
+                Npre = varargin{i+1};
             case 'PRESELECTED_IDX'
                 idx_sel_init = varargin{i+1};
             case 'LAMBDA2_C'
@@ -59,12 +80,32 @@ if ~isempty(idx_sel_init)
         end
         idx_sel_init = reshape(find(idx_sel_init),1,[]);
     end
-    idx_res_init = setdiff(1:p,idx_sel_init);
-else
-    idx_sel_init = []; idx_res_init = 1:p;
 end
 
-
+switch upper(mode_preselect)
+    case 'NORMAL'
+        idx_sel_init = []; idx_res_init = 1:p;
+    case 'BATCH0'
+        if ~isempty(idx_sel_init)
+            idx_res_init = setdiff(1:p,idx_sel_init);
+        else
+            idx_sel_init = []; idx_res_init = 1:p;
+        end
+    case 'N-SEQUENTIAL'
+        if ~isempty(idx_sel_init)
+            idx_res_init = idx_sel_init;
+            idx_sel_init = [];
+            if Npre==0
+                fprintf('No point in doing %s with Npre=%d...\n',...
+                    mode_preselect,Npre);
+            end
+        else
+            idx_sel_init = []; idx_res_init = 1:p;
+        end
+        idx_res_all = 1:p;
+    otherwise
+        error('Undefined PreselectMode %s',mode_preselect);
+end
 
 XA = zeros(p,N); XC = zeros(d,N); res = zeros(1,N);
 
@@ -88,9 +129,8 @@ for n=1:N %numblocks
     else
         r_min = vnorms(y - Atmp*xA_min - Ctmp*xC_min,1,2);
     end
-    
     fprintf('Initial Error: %f\n',r_min);
-    
+
     % ------------------------------------------------------------------- %
     % Main Loop
     % ------------------------------------------------------------------- %
@@ -99,6 +139,15 @@ for n=1:N %numblocks
     % or until the maximum number of the additional endmembers is reached.
     while (r_min>tol) && (iter < maxnum)
         iter = iter + 1;
+        
+        switch upper(mode_preselect)
+            case 'N-SEQUENTIAL'
+                % After finishing first Npre iterations, preset the
+                % unselected endmembers.
+                if iter==Npre+1
+                    idx_res = setdiff(idx_res_all,idx_sel);
+                end
+        end
         
         % Find the endmember that minimizes the error in a least square
         % sense.
