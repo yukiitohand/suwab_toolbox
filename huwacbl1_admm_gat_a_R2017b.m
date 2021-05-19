@@ -424,7 +424,7 @@ end
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d)) 
     if isdebug
-        cost_val = sum(abs(y-A*t(1:N,:)-C*t(N+1:N+L,:))./tau,'all')+sum(abs(lambda_a.*t(1:N,:)),'all');
+        cost_val = sum(sum(abs(y-A*t(1:N,:)-C*t(N+1:N+L,:))./tau,1),2)+sum(sum(abs(lambda_a.*t(1:N,:)),1),2);
         cost_vals = [cost_vals cost_val];
         params = [params Cnd_Val];
         params_2 = [params_2 Cnd_Val_apro];
@@ -540,9 +540,9 @@ if gpu
 end
 
 if Aisempty
-    cost_val = sum(abs(y-C*z)./tau,'all');
+    cost_val = sum(sum(abs(y-C*z)./tau,1),2);
 else
-    cost_val = sum(abs(y-A*x-C*z)./tau,'all')+sum(abs(lambda_a.*x),'all');
+    cost_val = sum(sum(abs(y-A*x-C*z)./tau,1),2)+sum(sum(abs(lambda_a.*x),1),2);
 end
 
 end

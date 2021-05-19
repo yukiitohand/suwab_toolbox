@@ -282,7 +282,7 @@ end
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     if isdebug
-        cost_val = sum(abs(A*t(1:N,:)-y),'all');
+        cost_val = sum(sum(sum(abs(A*t(1:N,:)-y),1),2),3);
         cost_vals = [cost_vals cost_val];
         params = cat(2,params,Cnd_Val);
         params_2 = cat(2,params_2,Cnd_Val_apro);
@@ -306,9 +306,9 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     if mod(k,10) == 0 || k==1
         % st = s-t; tt02 = (t-t0).^2;
         % primal feasibility
-        res_p = sqrt(sum((s-t).^2,'all'));
+        res_p = sqrt(sum(sum(sum((s-t).^2,1),2),3));
         % dual feasibility
-        res_d = sqrt(sum((rho.*Rhov.*(t-t0)).^2,'all'));
+        res_d = sqrt(sum(sum(sum((rho.*Rhov.*(t-t0)).^2,1),2),3));
         if  verbose
             fprintf(' k = %f, res_p = %e, res_d = %e\n',k,res_p,res_d)
         end

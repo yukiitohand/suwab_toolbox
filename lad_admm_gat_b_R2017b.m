@@ -327,7 +327,7 @@ end
 
 while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
     if isdebug
-        cost_val = sum(abs(A*t(1:N,:)-y),'all');
+        cost_val = sum(sum(abs(A*t(1:N,:)-y),1),2);
         cost_vals = [cost_vals cost_val];
         params = [params Cnd_Val];
         params_2 = [params_2 Cnd_Val_apro];
@@ -435,5 +435,5 @@ r = t(N+1:NL,:);
 if gpu
     [d,x,r,rho,Rhov] = gather(d,x,r,rho,Rhov);
 end
-cost_val = sum(abs(A*x-y),'all');
+cost_val = sum(sum(abs(A*x-y),1),2);
 end
