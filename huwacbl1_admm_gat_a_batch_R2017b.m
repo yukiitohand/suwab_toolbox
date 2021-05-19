@@ -392,7 +392,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % update rho
         idx = and(res_pv > 10*res_dv,rho<1e5);
         % it doesn't matter 1e5 or 1e10
-        if any(idx,'all')
+        if any(any(any(idx,1),2),3)
             rho(idx) = rho(idx)*2;
             ones1NyM(:) = 1;
             ones1NyM(idx) = 0.5;
@@ -400,7 +400,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         end
         idx2 = and(res_dv > 10*res_pv,rho>1e-5);
         % it doesn't matter 1e5 or 1e10
-        if any(idx2,'all')
+        if any(any(any(idx2,1),2),3)
             rho(idx2) = rho(idx2)/2;
             ones1NyM(:) = 1;
             ones1NyM(idx2) = 2;
@@ -418,11 +418,11 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % idx3 = res_pv2 > 10*res_dv2;
         % idx4 = res_dv2 > 10*res_pv2;
         
-        if any(idx3,'all') || any(idx4,'all')
+        if any(any(any(idx3,1),2),3) || any(any(any(idx4,1),2),3)
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
-            if any(Tcond.*max(Rhov_new)./min(Rhov_new) < th_cond,'all')
+            if any(any(any(Tcond.*max(Rhov_new)./min(Rhov_new) < th_cond,1),2),3)
                 % for this application, 1e13 may be more suitable than 1e8.
                 % This is because the approximation of the matrix condition
                 % doesn't seem to be accurate enough (much higher than the

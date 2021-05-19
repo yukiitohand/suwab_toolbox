@@ -327,7 +327,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         idx = and(res_pv > 10*res_dv, rho<1e5);
         % it looks this upper bound is improtant for stable convergence. it
         % doesn't matter 1e5, 1e3, or 1e10
-        if any(idx,'all')
+        if any(any(any(idx,1),2),3)
             rho(idx) = rho(idx)*2;
             ones1NyM(:) = 1;
             ones1NyM(idx) = 0.5;
@@ -336,7 +336,7 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         idx2 = res_dv > and(10*res_pv, rho>1e-5);
         % it looks this lower bound is improtant for stable convergence. it
         % doesn't matter 1e-5, 1e-3, or 1e-10
-        if any(idx2,'all')
+        if any(any(any(idx2,1),2),3)
             rho(idx2) = rho(idx2)/2;
             ones1NyM(:) = 1;
             ones1NyM(idx2) = 2;
@@ -357,13 +357,13 @@ while (k <= maxiter) && ((abs(res_p) > tol_p) || (abs(res_d) > tol_d))
         % idx3 = res_pv2 > 10*res_dv2;
         % idx4 = res_dv2 > 10*res_pv2;
 
-        if any(idx3,'all') || any(idx4,'all')
+        if any(any(any(idx3,1),2),3) || any(any(any(idx4,1),2),3)
             Rhov_new = Rhov;
             Rhov_new(idx3) = Rhov_new(idx3)*2;
             Rhov_new(idx4) = Rhov_new(idx4)/2;
             
             % if cond(KPinvKt,2) < 1e12
-            if any(Kcond.*max(Rhov_new)./min(Rhov_new) < th_cond,'all')
+            if any(any(any(Kcond.*max(Rhov_new)./min(Rhov_new) < th_cond,1),2),3)
                 % first I upper bounded with 1e13, realize 1e-8 shows
                 % better results
                 % this one 
