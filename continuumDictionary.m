@@ -1,4 +1,4 @@
-function [ D ] = continuumDictionary( p )
+function [ D ] = continuumDictionary( p,varargin )
 %[ D ] = continuumDictionary( p )
 %   Contruct a dictionary of continuums for p dimensional signals
 %   Inputs
@@ -15,6 +15,22 @@ function [ D ] = continuumDictionary( p )
 %       | +    :         +
 %      -+------------------+----------->
 %              i
+
+scale_type = 'uniform';
+if (rem(length(varargin),2)==1)
+    error('Optional parameters should always go by pairs');
+else
+    for i=1:2:(length(varargin)-1)
+        switch upper(varargin{i})
+            case 'SCALE'
+                scale_type = varargin{i+1};
+            otherwise
+                error('Unrecognized option:, %s', varargin{i});
+        end
+    end
+end
+
+
 if isnumeric(p) && isvector(p)
     L = length(p);
     if L==1
@@ -27,9 +43,13 @@ if isnumeric(p) && isvector(p)
     elseif L>1
         D = concaveOperator(p);
         Dinv = D\eye(L);
-        s_d = vnorms(Dinv,1);
-        Dinv = bsxfun(@rdivide,Dinv,s_d);
-%         D = bsxfun(@times,D,s_d');
+        switch upper(scale_type)
+            case 'UNIFORM'
+                s_d = vnorms(Dinv,1);
+                Dinv = bsxfun(@rdivide,Dinv,s_d);
+            case 'NATURAL'
+
+        end
         D = Dinv;
     else
         error('p is empty');
