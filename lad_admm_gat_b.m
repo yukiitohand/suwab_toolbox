@@ -431,5 +431,5 @@ r = t(N+1:NL,:);
 if gpu
     [d,x,r,rho,Rhov] = gather(d,x,r,rho,Rhov);
 end
-cost_val = sum(abs(A*x-y),'all');
+cost_val = sum(reshape(abs(A*x-y),[],1));
 end
