@@ -150,6 +150,10 @@ d0 = [];
 % base matrix of concave curvature
 C = [];
 
+%
+c2_z = zeros(L, Ny);
+c2_z([1, L], :) = -inf;
+
 % Precision
 precision = 'double';
 
@@ -226,6 +230,8 @@ else
                 if any(size(C) ~= [L L])
                     error('CONCAVEBASE is invalid size');
                 end
+            case 'C2_Z'
+                c2_z = varargin{i+1};
             case 'Z0'
                 z0 = varargin{i+1};
                 if (size(z0,1) ~= L)
@@ -339,12 +345,13 @@ PT_ort = I_N2L - PinvTt_invTPinvTt*T;
 % projection operator
 c1 = zeros([N+2*L,Ny],precision,gpu_varargin{:});
 c1(1:N,:) = lambda_a.*ones([N,Ny],precision,gpu_varargin{:});
-c1(N+1:N+L,:) = lambda_c.*ones([L,1],precision,gpu_varargin{:});
-c1(N+L+1:N+L*2,:) = lambda_r.*ones([L,1],precision,gpu_varargin{:})./tau*tau1;
+c1(N+1:N+L,:) = lambda_c.*ones([L,Ny],precision,gpu_varargin{:});
+c1(N+L+1:N+L*2,:) = lambda_r.*ones([L,Ny],precision,gpu_varargin{:})./tau*tau1;
 c1rho = c1./rho./Rhov;
 
-c2 = zeros([N+2*L,1],precision,gpu_varargin{:});
-c2(N+1) = -inf; c2(N+L) = -inf; c2(N+L+1:N+2*L) = -inf;
+c2 = zeros([N+2*L, Ny],precision,gpu_varargin{:});
+c2(N+1:N+L, :) = c2_z;
+c2(N+L+1:N+2*L, :) = -inf;
 
 
 %%
